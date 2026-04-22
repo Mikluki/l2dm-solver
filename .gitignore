@@ -1,0 +1,38 @@
+
+
+
+# General
+**tmp.py
+*tmp.md
+**prompt**.md
+**prompt.py
+*_*.py        # ignore all _*.py
+!*__*.py      # except for __*.py
+**.log
+**_.gif
+**_.mp4
+**test.py
+
+# Distribution / packaging
+**__pycache__
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+*.egg-info/
+*.egg
+lib64/
+parts/
+.pytest_cache/
+.python-version
+.Python
+sdist/
+var/
+wheels/
+
+# Environments
+.env
+.venv
+venv/
