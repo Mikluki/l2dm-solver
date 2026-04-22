@@ -1,17 +1,19 @@
-
+# notes
+**em-heat-theory.pdf
 
 
 # General
-**tmp.py
-*tmp.md
 **prompt**.md
 **prompt.py
+**test.py
+**tmp.py
+*tmp.md
 *_*.py        # ignore all _*.py
 !*__*.py      # except for __*.py
 **.log
 **_.gif
 **_.mp4
-**test.py
+**_.jpg
 
 # Distribution / packaging
 **__pycache__
