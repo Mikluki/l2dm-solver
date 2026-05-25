@@ -152,6 +152,24 @@ The `w.kappa` indirection inside the form is what makes coefficients piecewise-c
 
 This is the only inlined example in this doc. All other API specifics live in code.
 
+## Nullspace handling: node-pinning convention
+
+When a problem's boundary conditions are pure-Neumann (e.g., zero-flux on every edge), the stiffness matrix is singular: the discrete operator has a one-dimensional kernel — the constant function — exactly as the continuous operator does. The solution is determined only up to an additive constant, and the linear solve will either fail (singular matrix) or return garbage. Some fix is mandatory.
+
+We use **node-pinning uniformly** (ADR-0005). The convention:
+
+1. **When to pin.** Pin exactly one DOF iff the problem has no Dirichlet boundary. Do not pin when at least one Dirichlet DOF already exists — the Dirichlet condition removes the nullspace cleanly on its own.
+2. **Which DOF — caller chooses.** The `Problem` declares its own pin location via `pin_point() -> (x, y) | None`. Returning `None` means "no pin needed" (Dirichlet present). Returning `(x, y)` means "pin the mesh DOF nearest this point". The solver does **not** invent a default: there is no centroid-or-corner heuristic, no `dofs[0]` fallback. The choice is the problem author's, recorded next to the exact solution it must be consistent with.
+3. **How to pick a good pin point.** Two soft rules for problem authors:
+   - **Pick a geometry feature node.** Domain corners and explicit gmsh points are guaranteed to be mesh nodes at every refinement, so the *same* node gets pinned each time and the constant offset is reproducible. Picking a generic interior point means the nearest-node lookup drifts as the mesh refines.
+   - **Pick a numerically benign location.** Where the exact solution is smooth and not near zero — pinning at a value of zero is fine in principle but inflates relative-error diagnostics.
+4. **What value.** Pin to the exact solution evaluated at the pin point. Discrete and reference solutions then share the same gauge, and the $L^2$ error reflects only discretization error, not the constant ambiguity. (Problems without an exact solution — none in Part 1 — must define a pin value separately; cross that bridge when it appears.)
+5. **How, in scikit-fem.** Add the pinned DOF to the Dirichlet DOF set passed to `condense(A, b, D=dirichlet_dofs)` and place the pin value in `x` at that index before condensing. No special code path — the pin is a Dirichlet DOF as far as the solver is concerned.
+
+**Why not subtract the mean.** Subtract-the-mean is silent: a forgotten nullspace fix produces a finite-looking answer with an arbitrary constant offset, and the convergence rate measurement can still look right because rates are scale-invariant in the perturbation. Node-pinning fails loudly — `spsolve` raises on a singular matrix the first time the fix is forgotten. ADR-0005 chose the loud failure mode.
+
+**Why no solver-side default for the pin point.** A default would let a problem author forget to think about pin placement and still get a working test, masking either a poor pin choice (drift across refinements, ill-conditioned spot) or a bug where the pin landed somewhere unintended. Requiring `pin_point()` to be explicit forces the author to look at the exact solution and pick a point on purpose.
+
 ## Part 2 (out of scope, sketched)
 
 When Part 2 begins, the integral form requires:

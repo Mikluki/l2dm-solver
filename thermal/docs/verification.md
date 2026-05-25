@@ -69,11 +69,7 @@ This interface is the cross-document contract between `verification.md` and `arc
 
 **Exact solution:** $T(x,y) = \cos(\pi x)\cos(\pi y)$. Satisfies the zero-flux BC exactly and has zero mean over $\Omega$, so $\int Q\,dA = 0$ as required by pure Neumann.
 
-**Nullspace handling:** The pure-Neumann problem defines $T$ only up to a constant. Two acceptable options for this test:
-- (a) Subtract the mean from both computed and exact $T$ before comparing.
-- (b) Pin one node to the exact value.
-
-Option (a) is preferred because it doesn't perturb the system. Note in the test code which one is used.
+**Nullspace handling:** The pure-Neumann problem defines $T$ only up to a constant. Resolved by node-pinning per ADR-0005 and `architecture.md` § Nullspace handling — pin one DOF to the exact value at a point declared by the `Problem`. For Problem 1: `pin_point() = (0, 0)`, where $T = 1$. A geometry corner is a guaranteed mesh node at every refinement, keeping the pinned DOF index reproducible across the convergence study. Note in the test code which one is used.
 
 **Failure diagnostic:** If this fails, the harness itself is wrong — wiring between problem definition, scikit-fem, and the error norm. Until this passes, no other problem is meaningful. Do not move on.
 
