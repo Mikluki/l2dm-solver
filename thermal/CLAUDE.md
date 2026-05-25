@@ -2,14 +2,26 @@
 
 ## Read these first
 
-The four core docs in `docs/` are the source of truth for this project. Do not work from summaries in this file.
+The three core docs in `docs/` are the source of truth for this project. Do not work from summaries in this file.
 
 - **`docs/physics.md`** — what the code computes, the equations, the symbol glossary, the regime assumptions.
 - **`docs/verification.md`** — the test problems, the harness requirements, the Problem-definition interface.
 - **`docs/architecture.md`** — stack, module layout, key abstractions, decisions, out-of-scope.
-- **`docs/open-questions.md`** — live questions with resolution criteria.
 
-Decisions live in `docs/decisions/` as numbered ADRs. Submissions live in `docs/submissions/`.
+Decisions live in `docs/decisions/` as numbered ADRs. Submissions live in `docs/submissions/`. The planner's running list of unresolved questions lives in `docs/open-questions.md` — see "Worker reading discipline" below before reading it.
+
+### Worker reading discipline
+
+When picking up a submission, the reading set is:
+
+1. `CLAUDE.md` (this file).
+2. The submission brief in `docs/submissions/`.
+3. The core-doc sections the brief enumerates under "Relevant core-doc sections".
+4. The ADRs the brief cites.
+
+If the brief is silent on a topic that affects your implementation, the three core docs above are the default scope — but flag the gap, do not fill it from memory.
+
+Do **not** read `docs/open-questions.md`. It is a planner-only scratchpad of unresolved design questions and their resolution paths. Anything there that matters for your submission has either been inlined into the brief or resolved before the brief was written. Reading it during implementation pulls in noise and tempts unresolved-question expansion into your task. If you suspect a question relevant to your submission is missing from the brief, stop and surface — do not self-resolve from `open-questions.md`.
 
 ---
 
@@ -135,7 +147,8 @@ Never create bloat files. Every markdown file is a maintenance burden.
 
 - `README.md` at root — overview + quick start only.
 - `CLAUDE.md` at root — this file.
-- `docs/physics.md`, `docs/verification.md`, `docs/architecture.md`, `docs/open-questions.md` — the four core docs. Fixed set.
+- `docs/physics.md`, `docs/verification.md`, `docs/architecture.md` — the three core docs. Fixed set.
+- `docs/open-questions.md` — planner-only scratchpad. Not read by workers (see "Worker reading discipline" above).
 - `docs/decisions/NNNN-slug.md` — ADRs, one per decision.
 - `docs/submissions/NNNN-slug.md` — submission briefs.
 
