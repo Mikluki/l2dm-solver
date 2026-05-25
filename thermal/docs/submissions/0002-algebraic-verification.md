@@ -110,7 +110,7 @@ This submission is done when:
 
 Problems 1, 2, 3, 5 verify cleanly against the PDE, BCs, source compatibility, and (where applicable) interface and flux continuity stated in `verification.md`.
 
-Problem 4 has a discrepancy: my derivation of the leading correction to superposition gives a different functional form than the doc's $O(R_0/d)$ claim. Details in the Problem 4 subsection below; this is what holds the submission at `in-progress`.
+Problem 4 has a discrepancy in the stated asymptotic justification. The doc's $O(R_0/d)$ scaling is a real finite-separation/interface mechanism, but the documented bounded-domain superposition also has a common outer-boundary residual controlled by the disk-center offset relative to $R_{\text{out}}$. Details in the Problem 4 subsection below; this is what holds the submission at `in-progress`.
 
 ### Problem 1 — smooth manufactured solution
 
@@ -206,60 +206,66 @@ Equals $\int_\Omega Q\,dA = q_0 \cdot \pi R_0^2$ as required.
 
 ### Problem 4 — two well-separated disks ⚠ discrepancy
 
-No closed-form exact solution; the verification is qualitative + asymptotic.
+No closed-form exact solution; the verification is qualitative + asymptotic. The recheck found two distinct approximation defects that need to be separated.
 
 **1. Why naive superposition fails the outer Dirichlet BC.**
 
-Each shifted single-disk solution $T_{\text{single}}(|\mathbf{r}-\mathbf{r}_\beta|)$ (for $\beta \in \{A,B\}$) is constructed in Problem 3 to satisfy $T = 0$ on the circle $|\mathbf{r}-\mathbf{r}_\beta| = R_{\text{out}}$ — a circle of radius $R_{\text{out}}$ centered at $\mathbf{r}_\beta$. The joint problem's outer boundary is the circle of radius $R_{\text{out}}$ centered at the origin, which is **not** concentric with either $\mathbf{r}_A$ or $\mathbf{r}_B$. On the joint outer boundary $|\mathbf{r}| = R_{\text{out}}$ at angle $\theta$, the distance to disk A's center is
+Each shifted single-disk solution $T_{\text{single}}(|\mathbf{r}-\mathbf{r}_\beta|)$ is constructed to satisfy $T = 0$ on the circle $|\mathbf{r}-\mathbf{r}_\beta| = R_{\text{out}}$, centered at that disk. The joint problem's boundary is instead the circle $|\mathbf{r}|=R_{\text{out}}$ centered at the origin. For centers $\mathbf{r}_A=(a,0)$ and $\mathbf{r}_B=(-a,0)$, the exterior contribution from each disk is
 $$
-|\mathbf{r} - \mathbf{r}_A| = \sqrt{R_{\text{out}}^2 + a^2 - 2 R_{\text{out}}\, a \cos\theta},
+T_c(x)=A\ln\frac{R_{\text{out}}}{|x-c|},
+\qquad
+A=\frac{q_0R_0^2}{2\kappa_2}.
 $$
-where $a = |\mathbf{r}_A|$. This sweeps from $R_{\text{out}} - a$ (closest) to $R_{\text{out}} + a$ (farthest) as $\theta$ varies, and the exterior single-disk formula $T_{\text{single,out}}(r) = (q_0 R_0^2 / 2\kappa_2)\ln(R_{\text{out}}/r)$ evaluated at these distances is generically nonzero. So $T_{\text{sup}} \equiv T_{\text{single},A} + T_{\text{single},B}$ leaves a residual on $|\mathbf{r}| = R_{\text{out}}$, and the exact two-disk solution differs from $T_{\text{sup}}$ by a harmonic correction $\delta T$ that cancels this residual.
+On the actual boundary $x=R_{\text{out}}e^{i\theta}$,
+$$
+T_A+T_B
+=A\ln\frac{R_{\text{out}}^2}
+{|R_{\text{out}}e^{i\theta}-a|\,|R_{\text{out}}e^{i\theta}+a|},
+$$
+which is not identically zero. For the documented geometry $a=1$, $R_{\text{out}}=2$, it is positive at $\theta=0$ because the product of distances is $1\cdot3=3<R_{\text{out}}^2$, and negative at $\theta=\pi/2$ because the product is $\sqrt5\sqrt5=5>R_{\text{out}}^2$.
 
-The limit in which superposition becomes exact: $R_0/R_{\text{out}} \to 0$ together with $R_0/d \to 0$. In this limit the disks are point-like relative to both their separation and the outer boundary.
-
-**2. Leading correction — discrepancy with the doc's $O(R_0/d)$ claim.**
-
-*Key structural fact.* By the 2D analog of the shell theorem (rotational symmetry of a uniformly-sourced disk), the field **outside** each disk is exactly that of a point monopole at the disk center — there are no higher-multipole corrections from the finite disk size. So $T_{\text{sup}}$ satisfies the PDE *exactly* both inside each disk and in the exterior; the only failure is the joint outer Dirichlet BC.
-
-*Fourier decomposition of the boundary residual.* Set $x = a/R_{\text{out}}$ (with $a = d/2$ for symmetric placement $\mathbf{r}_A = -\mathbf{r}_B$). Using the standard expansion
+Expanding for $a/R_{\text{out}}\ll1$,
 $$
-\ln|\mathbf{r} - \mathbf{r}_A| \;=\; \ln R_{\text{out}} \;-\; \sum_{n=1}^{\infty}\frac{x^n}{n}\cos(n\theta) \quad\text{on } |\mathbf{r}| = R_{\text{out}},
+\ln|\mathbf{r}-\mathbf{r}_A|
+=\ln R_{\text{out}}
+-\sum_{n=1}^{\infty}\frac{(a/R_{\text{out}})^n}{n}\cos(n\theta)
+\quad\text{on }|\mathbf{r}|=R_{\text{out}}.
 $$
-the residual from disk A is
-$$
-T_{\text{single},A}\big|_{|\mathbf{r}|=R_{\text{out}}} = \frac{q_0 R_0^2}{2\kappa_2}\sum_{n=1}^{\infty}\frac{x^n}{n}\cos(n\theta).
-$$
-The mean ($n=0$) vanishes — that is the 2D mean-value theorem for harmonic functions applied to the monopole. Disk B is at $-\mathbf{r}_A$, giving the same series with $\cos(n\theta)\to(-1)^n\cos(n\theta)$. Summing:
-$$
-T_{\text{sup}}\big|_{|\mathbf{r}|=R_{\text{out}}} = \frac{q_0 R_0^2}{2\kappa_2}\sum_{n\geq 1}\frac{x^n}{n}\bigl[1 + (-1)^n\bigr]\cos(n\theta) = \frac{q_0 R_0^2}{\kappa_2}\sum_{\substack{n\geq 2 \\ n\,\text{even}}}\frac{x^n}{n}\cos(n\theta).
-$$
-**Odd modes cancel by symmetry; leading surviving mode is the quadrupole $n=2$ with amplitude $\propto x^2 = (a/R_{\text{out}})^2$.**
+The symmetric disk at $-\mathbf{r}_A$ cancels odd modes, so the leading boundary residual is the quadrupole $n=2$, with amplitude $O((a/R_{\text{out}})^2)$. Thus the shifted-single-disk superposition does not become exact from $R_0/d\to0$ and $R_0/R_{\text{out}}\to0$ alone unless the common-boundary effect is also controlled, e.g. by $d/R_{\text{out}}\to0$ or by using a common-domain Green's function.
 
-*Harmonic continuation inward.* Inside the domain, $\delta T = -[\text{above series}]$ with each mode multiplied by $(r/R_{\text{out}})^n$:
+**Conclusion:** the doc is incomplete on the asymptotic limit for the total bounded-domain discrepancy.
+
+**2. Leading finite-separation/interface correction.**
+
+The doc's $O(R_0/d)$ statement is nevertheless a real finite-separation mechanism. Near disk $A$, the field from disk $B$ is smooth:
 $$
-\delta T(r,\theta) = -\frac{q_0 R_0^2}{\kappa_2}\sum_{\substack{n\geq 2 \\ n\,\text{even}}}\left(\frac{a r}{R_{\text{out}}^2}\right)^{\!n}\frac{\cos(n\theta)}{n}.
+T_B(x)=T_B(c_A)+\nabla T_B(c_A)\cdot(x-c_A)+\cdots,
+\qquad
+|\nabla T_B(c_A)|\sim \frac{A}{d}
+=\frac{q_0R_0^2}{2\kappa_2d}.
 $$
-By Parseval, the L² norm over the outer disk is
+The constant term does not affect flux continuity at $\partial A$, but the linear term does. The same scalar field is being added on both sides of disk $A$, while physical flux multiplies its normal derivative by $\kappa_1$ inside and $\kappa_2$ outside. Therefore the other disk's contribution creates an interface-flux jump
 $$
-\|\delta T\|_{L^2(\Omega)} \;\sim\; R_{\text{out}}\cdot\frac{q_0 R_0^2}{\kappa_2}\cdot\left(\frac{a}{R_{\text{out}}}\right)^{\!2} \quad\text{at leading order.}
+[\kappa\partial_n T_B]_{\partial A}
+=(\kappa_1-\kappa_2)\partial_nT_B
+=O\!\left(\frac{q_0R_0^2}{d}\right).
 $$
+The self flux scale at disk $A$ is
+$$
+|\kappa_1T_A'(R_0)|=\frac{q_0R_0}{2},
+$$
+so the relative inter-disk interface defect is
+$$
+O\!\left(\frac{q_0R_0^2/d}{q_0R_0}\right)
+=O(R_0/d).
+$$
+This confirms the doc's finite-separation scaling as an interface-flux estimate; it is not the full story for the bounded-domain $L^2$ discrepancy because the outer-boundary residual above can dominate or vary in the opposite direction when $d$ changes at fixed $R_{\text{out}}$.
 
-*Functional dependence.* The leading correction scales as **$(a/R_{\text{out}})^2$**, i.e., on how close the disks are to the *outer boundary*. It has **no leading dependence on $R_0/d$**:
-- If $d$ and $R_{\text{out}}$ are held fixed while $R_0 \to 0$ (so $R_0/d, R_0/R_{\text{out}} \to 0$), both $T_{\text{sup}}$ and $\delta T$ scale as $R_0^2$; the *relative* error $\|\delta T\|/\|T\|$ is independent of $R_0$ at leading order (modulated only by the logarithmic factor in $\|T\|$, giving a slow $1/\ln(R_{\text{out}}/R_0)$ floor).
-- If $R_0$ and $R_{\text{out}}$ are held fixed while $d$ varies (so $a = d/2$ varies), the relative error grows like $(d/(2R_{\text{out}}))^2$ — that is, it *increases* as $d/R_0$ grows.
+**Discrepancy summary.** The statements "finite-separation corrections are $O(R_0/d)$" and "the discrepancy should decrease as $d/R_0$ grows" conflate two effects. The $O(R_0/d)$ interface defect is plausible and confirmed. The shifted-superposition approximation in the documented outer disk also has a boundary/image correction controlled by $a/R_{\text{out}}=d/(2R_{\text{out}})$, with leading symmetric residual $O((a/R_{\text{out}})^2)$. If the acceptance metric is total relative $L^2$ error against the numerical bounded-domain solution, the trend cannot be justified by $R_0/d$ alone.
 
-In neither parameterization does the relative error decrease as $R_0/d$.
+**Proposed resolution.** Clarify `verification.md` Problem 4 before implementation: either define the approximation using the common outer boundary so the test isolates the $O(R_0/d)$ interface interaction, or state that the measured discrepancy includes both $O(R_0/d)$ interface error and boundary/image error controlled by $d/R_{\text{out}}$.
 
-*Sanity-check the doc's threshold at the stated geometry.* With $\mathbf{r}_A = (\pm 1, 0)$, $R_{\text{out}} = 2$, $R_0 = 0.2$: $a/R_{\text{out}} = 0.5$. Leading L² discrepancy $\sim (a/R_{\text{out}})^2 / \ln(R_{\text{out}}/R_0) \approx 0.25 / 2.3 \approx 0.11$, in the same ballpark as the doc's "below 10%" acceptance threshold. So the **threshold itself is plausibly fine**; what fails is the *justification* and the *trend*.
-
-**Discrepancy summary.** The doc states "Finite-separation corrections are $O(R_0/d)$" and "the discrepancy ... should decrease as $d/R_0$ grows." My analysis says the leading dependence is $O((a/R_{\text{out}})^2)$, not $O(R_0/d)$; the convergence is not driven by $d/R_0$ at all. The mechanism is the outer-boundary Dirichlet mismatch (quadrupole-leading after symmetry cancellation), not finite-separation interaction between the disks (which vanishes for the exterior of uniform-source disks by the 2D shell theorem).
-
-**Proposed resolution (awaits human adjudication).** Either
-1. Revise the verification.md Problem 4 acceptance discussion: replace "$O(R_0/d)$" and "decreases as $d/R_0$ grows" with the $(a/R_{\text{out}})^2$-driven dependence, and rephrase the convergence-in-parameter test to vary $a/R_{\text{out}}$ (or fix the geometry and shrink $R_0$ with the slow logarithmic floor as the headline trend); or
-2. Demonstrate where my analysis is wrong (most likely place: my use of the 2D shell theorem to suppress inter-disk multipole interaction — challenge would be to identify a finite-disk correction term I've missed).
-
-This submission stays at status `in-progress` until adjudicated, per the brief's done-definition rules.
+This submission stays at status `in-progress` until the `verification.md` discrepancy is resolved, per the brief's done-definition rules.
 
 ### Problem 5 — reentrant corner
 
@@ -307,74 +313,3 @@ $$
 Sending $\epsilon \downarrow 0$, the asymptotic uniform-mesh $L^2$ rate is $4/3$. The optimal rate $2$ from the smooth case is lost because the standard interpolation argument requires $|T|_{H^2}$, which is unavailable here.
 
 This rate is "honest" in the sense that uniform refinement cannot recover it — it is a property of the solution's regularity, not a defect of P1 elements. The inverted assertion in `verification.md` Problem 5 (rate $\ge 1.8$ here *fails* the test) catches setups that secretly mask the corner singularity.
-
-## Independent recheck
-
-**Reviewer:** independent audit pass, executed against the first worker's `## Verification results`.
-
-**Blindness note:** I did not read the first worker's `## Verification results` before completing my own derivations. The permitted pre-results header/override text did disclose that Problem 4 already had a discrepancy, so the Problem 4 audit was not blind to the existence of a prior concern.
-
-**Verdict:** requires human adjudication
-
-**Per-check comparison table:**
-| Problem | Check | Result |
-|---|---|---|
-| 1 | 1 (Q matches) | AGREE |
-| 1 | 2 ($\partial T/\partial n = 0$) | AGREE |
-| 1 | 3 ($\int_\Omega Q\,dA = 0$) | AGREE |
-| 1 | 4 ($\int_\Omega T\,dA = 0$) | AGREE |
-| 2 | 1 (ODE in each subdomain) | AGREE |
-| 2 | 2 (left Dirichlet, right Neumann) | AGREE |
-| 2 | 3 (interface continuity and flux) | AGREE |
-| 2 | 4 (right region independent of $\kappa_2$) | AGREE |
-| 3 | 1 (radial PDE in each region) | AGREE |
-| 3 | 2 ($T(R_{\text{out}})=0$) | AGREE |
-| 3 | 3 (interface continuity and flux) | AGREE |
-| 3 | 4 (global outward flux) | AGREE |
-| 4 | 1 (superposition fails outer Dirichlet BC) | JOINT DOC DISCREPANCY — both derivations find a nonzero residual on the common outer boundary. The residual is controlled by the disk-center offset relative to $R_{\text{out}}$, so the doc's stated asymptotic/trend is incomplete unless the boundary geometry is also controlled. |
-| 4 | 2 (leading correction order) | DISAGREE — first worker wrong. The first worker's boundary-only argument misses an $O(R_0/d)$ interface-flux defect caused by applying the other disk's smooth exterior field across a $\kappa_1/\kappa_2$ material interface. The boundary-image correction may still dominate the total bounded-domain $L^2$ error. |
-| 5 | 1 (harmonicity) | AGREE |
-| 5 | 2 (zero Dirichlet edges) | AGREE |
-| 5 | 3 ($L^2$ rate $4/3$) | AGREE |
-
-**Joint discrepancies in verification.md** (only those you and the first worker both found, with consistent derivations):
-
-Problem 4's shifted single-disk superposition does not satisfy the common outer Dirichlet boundary. For centers $c_A=(a,0)$ and $c_B=(-a,0)$, the outer contribution from each disk has the form
-$$
-T_c(x)=A\ln\frac{R_{\text{out}}}{|x-c|},
-\qquad
-A=\frac{q_0R_0^2}{2\kappa_2}.
-$$
-On the actual boundary $x=R_{\text{out}}e^{i\theta}$,
-$$
-T_A+T_B
-=A\ln\frac{R_{\text{out}}^2}
-{|R_{\text{out}}e^{i\theta}-a|\,|R_{\text{out}}e^{i\theta}+a|},
-$$
-which is not identically zero. Expanding for $a/R_{\text{out}}\ll1$, the symmetric pair cancels odd modes and leaves a leading quadrupole residual $O((a/R_{\text{out}})^2)$. Therefore a total-error claim based only on $R_0/d$ is incomplete for the documented bounded disk; a common-domain Green's function or an additional $d/R_{\text{out}}\to0$ control is needed.
-
-**Disagreements with the first worker** (where your derivation differs from theirs):
-
-Problem 4, check 2. The first worker argues that, by the 2D shell theorem, each uniformly sourced disk's exterior field is exactly monopolar, so the superposition satisfies the PDE exactly inside each disk and in the exterior; they conclude the only failure is the outer Dirichlet boundary, with leading correction $O((a/R_{\text{out}})^2)$.
-
-My derivation agrees that the boundary residual exists, but not that it is the only defect. Near disk $A$, the field from disk $B$ is smooth:
-$$
-T_B(x)=T_B(c_A)+\nabla T_B(c_A)\cdot(x-c_A)+\cdots,
-\qquad
-|\nabla T_B(c_A)|\sim \frac{q_0R_0^2}{2\kappa_2d}.
-$$
-The constant term is harmless, but the linear term crosses disk $A$'s material interface. The same scalar field has normal derivative on both sides, while the physical flux multiplies that derivative by $\kappa_1$ inside and $\kappa_2$ outside. Thus the other disk's contribution creates an interface-flux jump
-$$
-[\kappa\partial_n T_B]_{\partial A}
-=(\kappa_1-\kappa_2)\partial_nT_B
-=O\!\left(\frac{q_0R_0^2}{d}\right).
-$$
-The self flux scale at disk $A$ is
-$$
-|\kappa_1T_A'(R_0)|=\frac{q_0R_0}{2},
-$$
-so the relative inter-disk interface defect is $O(R_0/d)$. This is the specific step where I believe the first worker's derivation fails: the shell theorem gives the exterior field of a source disk, but it does not make that field satisfy flux continuity across a different conductivity inclusion.
-
-Assessment: `verification.md` is partly right that an $O(R_0/d)$ finite-separation/interface mechanism exists, but partly incomplete because the documented bounded-domain superposition also has a common-boundary/image correction controlled by $a/R_{\text{out}}$ or $d/R_{\text{out}}$. Human adjudication should decide whether Problem 4's acceptance target is meant to measure inter-disk interface interaction, common-boundary error, or both.
-
-**Recommended next action:** escalate to human for adjudication. Keep 0002 status unchanged until Problem 4's intended asymptotic regime and acceptance metric are clarified.
