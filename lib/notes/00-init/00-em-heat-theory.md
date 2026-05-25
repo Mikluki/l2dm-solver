@@ -289,7 +289,7 @@ there. Real-space inversion is only needed at output.
 - **Responsibilities.** Kirill: pseudocode + derivation of the EM integral
   equation & project lead. Vlad: 1D EM FEM implementation, validated against the strip
   reference. CST Microwave Studio reference solutions (square scatterer,
-  tooth scatterer, strip-on-stack) to be produced by Ilya / Sasha. Misha:
+  tooth scatterer, strip-on-stack) to be produced by Ilya / Sasha. Mikhail:
   aggregation.
 
 ### 4.4 Heat equation — questions raised and resolved
@@ -334,7 +334,7 @@ sink BC on those leads is imposed explicitly.
 
 - Svintsov: derivation of the surface integral heat equation eliminating
   the bulk.
-- Misha: first implement a **simpler scalar differential** problem —
+- Mikhail: first implement a **simpler scalar differential** problem —
   `∇·(κ(R) ∇T) = Q` on a 2D square with zero-flux BCs and spatially
   varying `κ` imitating metal/graphene patches — to develop the
   triangulation and basis-function infrastructure. Then migrate to the
