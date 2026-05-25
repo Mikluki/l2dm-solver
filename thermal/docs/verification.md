@@ -165,7 +165,7 @@ Continuity of $T$ and $\kappa T'$ at $r = R_0$ is built in; total flux through $
 
 **Purpose:** Verify that multiple disconnected subdomains compose correctly. This is the closest scalar-setting analog to the eventual multi-patch (graphene + metal contacts, or metasurface) case.
 
-**Domain:** Larger disk of radius $R_{\text{out}} = 2$ containing two inner disks of radius $R_0 = 0.2$, centered at $(\pm 1, 0)$.
+**Domain:** Larger disk of radius $R_{\text{out}}$ containing two inner disks of radius $R_0$, centered at $(\pm a, 0)$ with center-to-center separation $d_{\text{sep}} = 2a$. The acceptance family must keep both $R_0/d_{\text{sep}}$ and $d_{\text{sep}}/R_{\text{out}}$ controlled; a representative geometry is $d_{\text{sep}} = 2$, $R_0 = 0.2$, and $R_{\text{out}} \geq 8$.
 
 **Material:** $\kappa_1 = 1$ inside both inner disks, $\kappa_2 = 10$ outside.
 
@@ -173,19 +173,23 @@ Continuity of $T$ and $\kappa T'$ at $r = R_0$ is built in; total flux through $
 
 **Source:** $Q = q_0 = 1$ inside both inner disks, $0$ outside.
 
-**Exact solution:** No closed form. Acceptance is **superposition-based**: in the limit $R_0 / d \to 0$ (where $d$ is the center-to-center separation) and $R_0 / R_{\text{out}} \to 0$, the solution approaches the sum of two single-disk solutions from Problem 3, each shifted to its disk center:
+**Exact solution:** No closed form. Acceptance is **superposition-based**, but the approximation has two distinct error mechanisms that must not be conflated.
+
+The reference approximation is the sum of two single-disk solutions from Problem 3, each shifted to its disk center:
 $$T_{\text{two}}(\mathbf{r}) \approx T_{\text{single}}(|\mathbf{r} - \mathbf{r}_A|) + T_{\text{single}}(|\mathbf{r} - \mathbf{r}_B|).$$
 
-Finite-separation corrections are $O(R_0/d)$.
+Finite-separation/interface corrections scale as $O(R_0/d_{\text{sep}})$. The reason is local: near disk A, the field from disk B has gradient scale $O(q_0R_0^2/(\kappa_2 d_{\text{sep}}))$. Applied across disk A's $\kappa_1/\kappa_2$ interface, that smooth field creates a relative flux-continuity defect of order $R_0/d_{\text{sep}}$ compared with the self flux scale $O(q_0R_0)$.
+
+The shifted single-disk superposition also fails the **common outer Dirichlet boundary**. Each shifted single-disk solution is zero on a circle centered at its own disk, not on the joint circle $r = R_{\text{out}}$. For symmetric centers $(\pm a, 0)$, the leading boundary residual is quadrupolar and scales as $O((a/R_{\text{out}})^2) = O((d_{\text{sep}}/(2R_{\text{out}}))^2)$. Therefore the approximation becomes controlled only when both $R_0/d_{\text{sep}} \to 0$ and $d_{\text{sep}}/R_{\text{out}} \to 0$ (or when the reference approximation is changed to use a common-domain Green's function).
 
 **Failure diagnostic:** If Problems 1–3 pass and this fails:
 - gmsh failing to honor both embedded circles as separate physical surfaces.
 - Subdomain tagging collapsing both inner disks into one tag (legitimate, but then $\kappa$ assignment needs to handle it).
 - Assembly looping over elements but skipping one subdomain due to indexing.
 
-**Expected behavior:** This is a *convergence-in-geometric-parameter* test, not a convergence-in-$h$ test. Fix the mesh resolution and vary $d/R_0$. The discrepancy between the computed solution and the superposition approximation should decrease as $d/R_0$ grows.
+**Expected behavior:** This is a *convergence-in-geometric-parameter* test, not a convergence-in-$h$ test. Fix the mesh resolution and vary $R_0/d_{\text{sep}}$ while keeping $d_{\text{sep}}/R_{\text{out}}$ small and approximately fixed; equivalently, vary $d_{\text{sep}}$ and $R_{\text{out}}$ together so the outer-boundary residual does not become the dominant changing error. Do **not** infer convergence by moving the disks farther apart inside a fixed outer disk: that decreases $R_0/d_{\text{sep}}$ but increases the boundary/image error through $d_{\text{sep}}/R_{\text{out}}$.
 
-**Acceptance:** At $d/R_0 = 10$, relative discrepancy below 10% in $L^2$. Loose threshold because the approximation has finite-separation error; the trend matters more than the number.
+**Acceptance:** With $R_0/d_{\text{sep}} \leq 0.1$ and $d_{\text{sep}}/R_{\text{out}} \leq 0.25$, relative discrepancy below 10% in $L^2$. Loose threshold because the approximation has both finite-separation and boundary/image error; the controlled trend matters more than the number.
 
 **scikit-fem notes:** Two physical surfaces in gmsh, both tagged with the same subdomain marker (since both are "inner") — or tagged distinctly if we later want different $\kappa$ in each. Verify by inspection that the mesh has both circles resolved.
 

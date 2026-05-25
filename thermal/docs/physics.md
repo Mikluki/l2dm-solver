@@ -67,6 +67,8 @@ on a 2D domain with mixed Dirichlet/Neumann boundary conditions. This is a diffe
 
 The scalar PDE does not correspond to any limit of the substrate problem. It is not a "tier 0" of the hierarchy — it is infrastructure development. Calling it physics would be a category error.
 
+One practical consequence is that superposition arguments in the Part 1 verification problems are boundary-condition dependent. In a bounded scalar-PDE disk with material inclusions, a shifted single-inclusion solution is not an exact building block for a multi-inclusion problem: it creates both $O(R_0/d_{\text{sep}})$ interface-flux defects between inclusions and boundary/image defects controlled by $d_{\text{sep}}/R_{\text{out}}$, where $d_{\text{sep}}$ is inclusion separation. This is separate from the Part 2 substrate Green's function, whose translation invariance comes from the infinite in-plane substrate model.
+
 ## Symbol glossary
 
 | Symbol | Meaning | Units |
