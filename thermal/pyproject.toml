@@ -1,0 +1,20 @@
+[project]
+name = "thermal"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.13"
+dependencies = [
+    "gmsh>=4.13",
+    "matplotlib>=3.9",
+    "meshio>=5.3",
+    "numpy>=2.0",
+    "scikit-fem>=12.0",
+    "scipy>=1.14",
+]
+
+[dependency-groups]
+dev = [
+    "black>=24.0",
+    "pytest>=8.0",
+    "pytest-xdist>=3.8.0",
+]
