@@ -97,10 +97,14 @@ src/
   geometry/        — gmsh model builders. One function per shape.
   problems/        — Problem instances. One file per verification problem.
   harness/         — refinement-study driver, error norms, artifact emitters.
+scripts/           — CLI utilities. Not exercised by pytest. (proposed addition)
+  inspect.py       — human-comprehension dashboard renderer.
 tests/
   test_*.py        — pytest test functions wiring Problems through the harness.
-  _artifacts/      — diagnostic outputs. Gitignored.
+  _artifacts/      — failure-only diagnostic outputs. Gitignored.
   _mesh_cache/     — cached `.msh` files keyed by geometry hash. Gitignored.
+artifacts/         — inspector outputs. Gitignored. (proposed addition)
+  inspect/<problem>/ — dashboard.png, convergence.png per problem.
 docs/
   physics.md
   verification.md
@@ -113,6 +117,8 @@ pyproject.toml
 ```
 
 Five source modules. If any grows past one file's worth of code, that's its own decision recorded as an ADR.
+
+**Proposed:** `scripts/` and `artifacts/` are deliberately outside the harness contract. `scripts/inspect.py` is a look-at-your-work CLI that produces visual artifacts (mesh + BC + κ + source + exact T + computed T_h + error + convergence plot) on demand — distinct from the failure-only `tests/_artifacts/` bundle (ADR-0008). Keeping it outside `src/` makes its non-test role explicit. Pending human acceptance of this layout change.
 
 ## Decisions
 

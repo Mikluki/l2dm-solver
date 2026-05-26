@@ -2,6 +2,13 @@
 tests/_artifacts/
 tests/_mesh_cache/
 
+# Human-comprehension artifacts from scripts/inspect.py. Regeneratable.
+artifacts/
+
+# Parent l2dm-solver/.gitignore has `**test.py` which silently matches
+# `conftest.py`. Re-include the pytest conftest explicitly.
+!tests/conftest.py
+
 # Python tooling
 __pycache__/
 *.py[cod]

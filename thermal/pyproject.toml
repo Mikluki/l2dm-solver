@@ -18,3 +18,11 @@ dev = [
     "pytest>=8.0",
     "pytest-xdist>=3.8.0",
 ]
+
+[tool.pytest.ini_options]
+# Default-on INFO logs so the per-level error table and fitted rates land in
+# the pytest output without per-invocation flags. Override per-run with
+# `--log-cli-level=WARNING` to quiet.
+log_cli = true
+log_cli_level = "INFO"
+log_cli_format = "%(levelname)-7s %(name)s :: %(message)s"
