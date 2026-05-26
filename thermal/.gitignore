@@ -1,0 +1,13 @@
+# Mesh and artifact caches - never committed (ADR-0007, ADR-0008).
+tests/_artifacts/
+tests/_mesh_cache/
+
+# Python tooling
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Virtual environment
+.venv/
