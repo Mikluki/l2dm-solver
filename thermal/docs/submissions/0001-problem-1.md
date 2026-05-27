@@ -77,7 +77,9 @@ All must hold simultaneously.
    - $H^1$ semi-norm rate ≥ 0.9 *and* within 0.2 of 1.0.
    A rate that scrapes 1.8 should be treated as suspect, not as success — refer back to `verification.md` § Problem 1 failure diagnostic.
 3. **Node-pinning convention applied as specified.** The `Problem` exposes `pin_point()`; the solver pins the nearest-node DOF to the exact solution at that point; pinned-DOF index is reproducible across refinements (verified by an assertion in the test).
-4. **Mean shift is small.** Computed solution and exact solution agree on mean to within solver tolerance (~$10^{-10}$ relative) at the finest mesh — confirms the pin is in the right place and the assembly is unbiased.
+4. **Mean integral decays at FE-error scale.** At the finest mesh, $\left|\int_\Omega T_h\,dA - \int_\Omega T_{\text{exact}}\,dA\right|$ is bounded by a constant times the L² error. Concretely, the test asserts $|\int T_h\,dA| < 5\cdot\|T_h - T\|_{L^2}$ (note $\int T_{\text{exact}}\,dA = 0$ for Problem 1). This is an *orthogonal* signal to the L² rate — it catches sign-flipped assembly contributions that still converge — and it confirms both that the pin landed correctly and that the assembly is unbiased.
+
+   Rationale: an earlier draft of this brief asked for "agreement on mean to within solver tolerance ($\sim 10^{-10}$ relative)". That phrasing was wrong: $\int T_h\,dA$ is a discretization quantity that decays at the L² rate (∼ $h^2$), not at the linear-solver tolerance. Asserting against 1e-10 would either always fail (any reasonable mesh) or be replaced by a solver-side tautology (writing the pin value back and asserting we wrote it). The implemented check is the right scale.
 5. **Failure mode is visible.** Forced-failure check (run once, removed before commit): temporarily multiply the assembled $\kappa$ by 2 inside the solver. Confirm:
    - the test fails on the rate assertion,
    - `tests/_artifacts/test_problem_01/` is populated with the error-vs-$h$ table, fitted-rate value, and finest-mesh error-field plot,
