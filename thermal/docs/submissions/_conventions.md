@@ -64,8 +64,9 @@ On status flip to `accepted` (or `done`), compact the brief to roughly:
 - Head matter (Status / Predecessors / Successors).
 - Goal (one paragraph).
 - Acceptance — the criteria as they were, with each line marked ✓ or noted as superseded.
-- A short "What shipped" pointer: file paths, key commit hash if non-obvious, the one or two facts a future reader actually needs (e.g. "final L² rate 1.97 on transfinite mesh; convergence table in commit `<sha>`").
-- Out of scope (kept; it's a permanent boundary).
+- A short "What shipped" pointer: file paths, key commit hash if non-obvious, the one or two facts a future reader actually needs (e.g. "final L² rate 1.97 on transfinite mesh; convergence table in commit `<sha>`"). Brief-specific anti-creep items (decisions that exist *only* in this brief and aren't pinned in `architecture.md` § Out of scope) fold in here as one-liners so the signal survives compaction.
+
+The "Out of scope" section is **dropped** on accept. Project-wide exclusions are owned by `architecture.md` § Out of scope, which carries the motives and revisit triggers. Per-brief restatement was rotting on Part-1↔Part-2 boundaries and duplicating the canonical list.
 
 Move forced-failure logs and convergence tables into the commit message that flipped the status. Briefs are not changelogs.
 

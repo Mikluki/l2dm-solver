@@ -29,8 +29,4 @@ tests/{conftest.py, test_problem_01.py}
 .gitignore — adds tests/_artifacts/, tests/_mesh_cache/
 ```
 
-`Problem` is a `typing.Protocol` (structural typing, no inheritance) with `pin_point()` declared by each Problem; solver has no default. Subtract-the-mean is not used anywhere.
-
-## Out of scope (still binding for future work)
-
-Problems 2–5 and their geometry builders; subdomain-tagged P0 κ indirection (deferred to 0003); Dirichlet BC handling beyond what node-pinning needs; iterative solvers; AMR / parallelism / GPU / alternative element orders; benchmarking; validation against ⟨κ⟩.
+`Problem` is a `typing.Protocol` (structural typing, no inheritance) with `pin_point()` declared by each Problem; solver has no default. Subtract-the-mean is not used anywhere — node-pinning is the project-wide convention, recorded in `architecture.md` § Nullspace handling.
