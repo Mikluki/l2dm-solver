@@ -1,6 +1,6 @@
 # Submission 0003 — Problem 2 (piecewise-constant κ, 1D slab)
 
-**Status:** accepted
+**Status:** done
 **Predecessors:** 0001 (accepted). 0002 § Problem 2 verified the exact solution algebraically (now in `docs/derivations/algebraic-verification.md`).
 **Successors:** Problem 3; 0004 (harness L² norm correctness — surfaced by this submission).
 

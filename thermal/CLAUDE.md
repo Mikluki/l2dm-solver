@@ -9,7 +9,7 @@ The four core docs in `docs/` are the source of truth for this project. Do not w
 - **`docs/architecture.md`** — stack, module layout, key abstractions, decisions, out-of-scope.
 - **`docs/open-questions.md`** — live questions with resolution criteria.
 
-Submissions live in `docs/submissions/`. Algebraic derivations live in `docs/derivations/`. `docs/inspector.md` carries guidance for tasks touching `scripts/inspect.py` and `scripts/diagnose.py` — pull only when working on those.
+Submissions live in `docs/submissions/`. Algebraic derivations live in `docs/derivations/`. `docs/inspector.md` carries conventions for tasks touching `scripts/inspect.py` and `scripts/diagnose.py` — pull only when working on those.
 
 ---
 
