@@ -11,6 +11,7 @@ from typing import Callable
 import numpy as np
 
 from src.geometry.unit_square import build_unit_square
+from src.problems.protocol import DirichletBC
 
 # ============================================================================
 # CONSTANTS
@@ -39,14 +40,26 @@ class Problem01Manufactured:
     def geometry(self) -> Callable[[float], object]:
         return build_unit_square
 
-    def kappa(self, _subdomain_tag: int) -> float:
-        # Single subdomain, uniform conductivity.
+    def kappa(self, _subdomain_name: str) -> float:
+        # Single subdomain, uniform conductivity. Argument unused; the name
+        # parameter is kept for Protocol conformance (verification.md §
+        # Problem definition interface).
         return 1.0
 
     def source(self, x: np.ndarray, y: np.ndarray) -> np.ndarray:
         return 2.0 * _PI * _PI * np.cos(_PI * x) * np.cos(_PI * y)
 
-    def boundary_conditions(self) -> dict[int, object]:
+    def source_integral(self) -> float:
+        """Analytic value of $\\int_\\Omega Q\\,dA$ for the Layer 2 source check.
+
+        Closed form via separability + cosine symmetry on $[0,1]$:
+        $\\int_0^1 \\cos(\\pi x)\\,dx = 0$, so the whole product integral vanishes.
+        See artifacts/inspect/CONVENTIONS.md § Technique 2 — this must be a
+        one-liner, not a re-derivation, or a matching FE bug hides forever.
+        """
+        return 0.0
+
+    def boundary_conditions(self) -> dict[str, DirichletBC]:
         # Pure Neumann, zero flux everywhere. Empty dict signals "no Dirichlet
         # tags"; the zero-flux Neumann condition is the natural BC for the
         # bilinear form and requires no explicit contribution.

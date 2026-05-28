@@ -89,12 +89,12 @@ def run_refinement_study(
             )
         err_h1 = h1_seminorm_error(sr.solution, sr.basis, problem.exact_gradient)
         logger.info(
-            "h=%.4f n_dofs=%d L2=%.3e H1=%.3e pin_dof=%d",
+            "h=%.4f n_dofs=%d L2=%.3e H1=%.3e pin_dof=%s",
             h,
             sr.basis.N,
             err_l2,
             err_h1,
-            sr.pin_dof,
+            sr.pin_dof,  # may be None when Dirichlet kills the nullspace.
         )
         levels.append(
             LevelResult(

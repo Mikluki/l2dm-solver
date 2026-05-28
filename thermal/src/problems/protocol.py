@@ -1,13 +1,34 @@
 # ABOUTME: Structural typing.Protocol that every verification problem implements.
 # Defines the cross-document contract from verification.md § Problem definition
 # interface: geometry, kappa, source, boundary_conditions, exact_solution,
-# mesh_sizes, expected_rate, and the nullspace pin_point accessor.
+# mesh_sizes, expected_rate, and the nullspace pin_point accessor. Subdomains
+# are keyed by string name (matching scikit-fem's mesh.subdomains dict); BCs
+# are keyed by boundary string name and carry a DirichletBC dataclass payload.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Callable, Protocol
 
 import numpy as np
+
+# ============================================================================
+# BC SPEC
+# ============================================================================
+
+
+@dataclass(frozen=True)
+class DirichletBC:
+    """Homogeneous-or-constant Dirichlet boundary condition.
+
+    Only the scalar ``value`` form is supported in Part 1; callable-valued
+    Dirichlet (needed by Problem 5) and inhomogeneous Neumann are deferred
+    until a problem actually exercises them. Boundary tags absent from
+    ``Problem.boundary_conditions()`` are natural zero-flux Neumann.
+    """
+
+    value: float
+
 
 # ============================================================================
 # PROTOCOL
@@ -29,16 +50,26 @@ class Problem(Protocol):
         """
         ...
 
-    def kappa(self, subdomain_tag: int) -> float:
-        """Conductivity for the given subdomain tag (W/(m K))."""
+    def kappa(self, subdomain_name: str) -> float:
+        """Conductivity for the named subdomain (W/(m K)).
+
+        The name is the gmsh physical-group name propagated through meshio to
+        ``mesh.subdomains``; subdomain assignment is never by element-centroid
+        coordinate (ADR-0003, verification.md § Problem 2 failure diagnostic).
+        """
         ...
 
     def source(self, x: np.ndarray, y: np.ndarray) -> np.ndarray:
         """Vectorized source field Q(x, y)."""
         ...
 
-    def boundary_conditions(self) -> dict[int, object]:
-        """Map boundary tag -> BC specification (Dirichlet value or Neumann flux)."""
+    def boundary_conditions(self) -> dict[str, DirichletBC]:
+        """Map boundary name -> BC specification.
+
+        Unlisted boundary names are natural zero-flux Neumann (no
+        contribution to the load vector). Only ``DirichletBC`` is currently
+        supported; future inhomogeneous Neumann would extend this union.
+        """
         ...
 
     def exact_solution(self, x: np.ndarray, y: np.ndarray) -> np.ndarray:

@@ -1,9 +1,12 @@
 # ABOUTME: solve_scalar(problem, mesh_size) - the Part 1 scalar PDE solver.
-# Materialises the cached mesh, builds a P1 basis, assembles the stiffness
-# and load forms, applies the node-pin from Problem.pin_point() per ADR-0005,
-# and runs a direct sparse solve (ADR-0006). For Problem 1 specifically:
-# single subdomain, uniform kappa=1, smooth source - no P0 indirection
-# needed yet (deferred to Problem 2's submission).
+# Materialises the cached mesh, builds a P1 basis and a derived P0 basis for
+# the per-element kappa field (architecture.md § Coefficient handling),
+# assembles the stiffness and load forms, applies Dirichlet DOFs from
+# problem.boundary_conditions() and/or the node-pin from problem.pin_point()
+# (ADR-0005, nullspace handling rule 1: at least one Dirichlet => no pin), and
+# runs a direct sparse solve (ADR-0006). Subdomain assignment is by gmsh
+# physical-surface name propagated via meshio (ADR-0003) - never by
+# element-centroid coordinate.
 
 from __future__ import annotations
 
@@ -16,6 +19,7 @@ import numpy as np
 from skfem import (
     Basis,
     BilinearForm,
+    ElementTriP0,
     ElementTriP1,
     LinearForm,
     condense,
@@ -24,10 +28,15 @@ from skfem import (
 from skfem.helpers import dot, grad
 from skfem.io.meshio import from_meshio
 
+from src.geometry.rectangle_split import (
+    RectangleSplitSpec,
+    materialise as materialise_rectangle_split,
+)
 from src.geometry.unit_square import (
     UnitSquareSpec,
     materialise as materialise_unit_square,
 )
+from src.problems.protocol import DirichletBC
 from src.solver.result import SolverResult
 
 logger = logging.getLogger(__name__)
@@ -40,6 +49,12 @@ logger = logging.getLogger(__name__)
 # Default mesh cache root. Tests override via the public solve_scalar() arg.
 _DEFAULT_CACHE = Path(__file__).resolve().parents[2] / "tests" / "_mesh_cache"
 
+# Subdomain names emitted by gmsh+meshio that are not real material regions
+# (e.g. the auxiliary group meshio synthesises for line-bounded entities).
+# We filter these out before building the per-element kappa table so the
+# Problem.kappa() lookup is never asked for a name it doesn't know about.
+_RESERVED_SUBDOMAIN_NAMES = {"gmsh:bounding_entities"}
+
 
 # ============================================================================
 # FORMS
@@ -47,11 +62,16 @@ _DEFAULT_CACHE = Path(__file__).resolve().parents[2] / "tests" / "_mesh_cache"
 
 
 @BilinearForm
-def _stiffness(u, v, _w):
-    # Single subdomain, kappa = 1 - the P0-field-per-tag indirection is the
-    # Problem 2 pattern (architecture.md § Coefficient handling) and is
-    # explicitly deferred for this submission.
-    return dot(grad(u), grad(v))
+def _stiffness_kappa(u, v, w):
+    """Per-element kappa via the w.kappa indirection (P0 field).
+
+    The form sees a different kappa value in each element; passing the raw
+    P0 numpy array (rather than basis_p0.interpolate(...)) would silently
+    broadcast and give "right rate, wrong constant" (architecture.md §
+    Coefficient handling). The Problem-2 acceptance check exists to catch
+    exactly that footgun.
+    """
+    return w.kappa * dot(grad(u), grad(v))
 
 
 def _make_load(source):
@@ -61,7 +81,10 @@ def _make_load(source):
     ``basis.interpolate`` - avoids an O(h^2) projection error that otherwise
     contaminates the L^2 rate measurement. The "right rate, wrong constant"
     failure mode in architecture.md § Coefficient handling applies to source
-    fields just as much as to kappa.
+    fields just as much as to kappa. For mesh-aligned discontinuous sources
+    (Problem 2: q_0 inside x<1/2, 0 outside) the alignment guarantees each
+    element's quadrature points all live on the same side of the interface,
+    so per-element evaluation is exact.
     """
 
     @LinearForm
@@ -77,13 +100,11 @@ def _make_load(source):
 
 
 def _materialise_geometry(spec: Any, cache_dir: Path) -> Path:
-    """Dispatch the geometry-spec object to the right cache-backed builder.
-
-    Kept tiny on purpose: Problem 1 only needs UnitSquareSpec; further shapes
-    extend this dispatch in their own submissions.
-    """
+    """Dispatch the geometry-spec object to the right cache-backed builder."""
     if isinstance(spec, UnitSquareSpec):
         return materialise_unit_square(spec, cache_dir)
+    if isinstance(spec, RectangleSplitSpec):
+        return materialise_rectangle_split(spec, cache_dir)
     raise TypeError(f"unsupported geometry spec: {type(spec).__name__}")
 
 
@@ -104,6 +125,91 @@ def _nearest_node_dof(basis: Basis, point: tuple[float, float]) -> int:
     return int(np.argmin(d2))
 
 
+def _build_kappa_p0_values(mesh, problem) -> np.ndarray:
+    """Per-element kappa array, indexed by mesh element id.
+
+    Reads ``mesh.subdomains`` (a dict from physical-group name to element-
+    index ndarray) and asks ``problem.kappa(name)`` for each material region.
+    Reserved gmsh-internal names are skipped. Every element must end up in
+    exactly one Problem-known subdomain; an uncovered element is a tagging
+    bug (e.g. interface not synchronised with the surfaces) and we want it
+    loud, not silent.
+    """
+    if not mesh.subdomains:
+        # No tags exported - fall back to a single Problem.kappa(name) call
+        # with the empty string so single-subdomain problems (Problem 1)
+        # keep working without re-tagging their existing mesh.
+        return np.full(mesh.t.shape[1], problem.kappa(""))
+
+    n_elem = mesh.t.shape[1]
+    kappa = np.full(n_elem, np.nan)
+    material_names = [
+        name for name in mesh.subdomains if name not in _RESERVED_SUBDOMAIN_NAMES
+    ]
+    for name in material_names:
+        elem_ids = np.asarray(mesh.subdomains[name])
+        kappa[elem_ids] = problem.kappa(name)
+
+    if np.isnan(kappa).any():
+        n_missing = int(np.isnan(kappa).sum())
+        raise ValueError(
+            f"{n_missing} of {n_elem} elements not covered by any Problem-known "
+            f"subdomain; checked names={material_names}. Subdomain tagging is "
+            f"by gmsh physical-surface name (ADR-0003); coordinate-based "
+            f"assignment is forbidden."
+        )
+    return kappa
+
+
+def _resolve_dirichlet_dofs(
+    basis: Basis,
+    bcs: dict[str, DirichletBC],
+) -> tuple[np.ndarray, np.ndarray]:
+    """Return (dirichlet_dof_indices, values_for_those_dofs).
+
+    Each boundary name in ``bcs`` is looked up in ``mesh.boundaries`` and
+    converted to a DOF-index array via ``basis.get_dofs(facets=...)``. Only
+    ``DirichletBC(value: float)`` is supported in Part 1; callable Dirichlet
+    and inhomogeneous Neumann are deferred (Protocol contract).
+    """
+    if not bcs:
+        return np.array([], dtype=np.int64), np.array([], dtype=float)
+
+    mesh = basis.mesh
+    if not mesh.boundaries:
+        raise ValueError(
+            f"Problem declared Dirichlet BCs {list(bcs)} but mesh.boundaries "
+            f"is empty - the geometry builder must tag boundary edges as "
+            f"named gmsh physical curves."
+        )
+
+    dof_chunks: list[np.ndarray] = []
+    value_chunks: list[np.ndarray] = []
+    for name, spec in bcs.items():
+        if not isinstance(spec, DirichletBC):
+            raise NotImplementedError(
+                f"BC spec {type(spec).__name__} for boundary {name!r} not "
+                f"supported in Part 1; only DirichletBC is wired."
+            )
+        if name not in mesh.boundaries:
+            raise KeyError(
+                f"Dirichlet boundary {name!r} not in mesh.boundaries "
+                f"(available: {list(mesh.boundaries)})"
+            )
+        dofs = basis.get_dofs(facets=mesh.boundaries[name]).flatten()
+        dof_chunks.append(np.asarray(dofs, dtype=np.int64))
+        value_chunks.append(np.full(dofs.shape, float(spec.value)))
+
+    all_dofs = np.concatenate(dof_chunks)
+    all_values = np.concatenate(value_chunks)
+    # Deduplicate corner DOFs that belong to two named edges; keep the first
+    # value seen. For homogeneous Dirichlet (the only Part-1 case) this is
+    # moot but defended explicitly so a future inhomogeneous case fails loud
+    # if two declared edges disagree at a shared corner.
+    unique_dofs, first_idx = np.unique(all_dofs, return_index=True)
+    return unique_dofs, all_values[first_idx]
+
+
 # ============================================================================
 # SOLVER
 # ============================================================================
@@ -117,8 +223,10 @@ def solve_scalar(
 ) -> SolverResult:
     """Solve the Part 1 scalar PDE for ``problem`` at ``mesh_size``.
 
-    The pipeline mirrors architecture.md § Pipeline: geometry -> cached mesh
-    -> P1 basis -> assembly -> BC/pin -> direct sparse solve.
+    Pipeline (architecture.md § Pipeline):
+        geometry -> cached mesh -> P1 basis -> P0 kappa table -> assemble
+        stiffness (w.kappa) and load -> Dirichlet DOFs from boundary tags +
+        optional pin -> direct sparse solve.
     """
     cache_dir = mesh_cache_dir if mesh_cache_dir is not None else _DEFAULT_CACHE
 
@@ -127,44 +235,66 @@ def solve_scalar(
     spec = geometry_builder(mesh_size)
     msh_path = _materialise_geometry(spec, cache_dir)
     mesh = _load_mesh(msh_path)
-    logger.debug("loaded mesh: %d nodes, %d elements", mesh.p.shape[1], mesh.t.shape[1])
+    logger.debug(
+        "loaded mesh: %d nodes, %d elements", mesh.p.shape[1], mesh.t.shape[1]
+    )
 
-    # --- Basis + assembly ---------------------------------------------------
+    # --- Basis + per-element kappa ------------------------------------------
     basis = Basis(mesh, ElementTriP1())
-    A = _stiffness.assemble(basis)
-    # Source evaluated directly at quadrature points - see _make_load.
+    basis_p0 = basis.with_element(ElementTriP0())
+    kappa_values = _build_kappa_p0_values(mesh, problem)
+    kappa_field = basis_p0.interpolate(kappa_values)
+
+    # --- Assembly -----------------------------------------------------------
+    A = _stiffness_kappa.assemble(basis, kappa=kappa_field)
     b = _make_load(problem.source).assemble(basis)
 
-    # --- BCs ---------------------------------------------------------------
-    # For Problem 1 there are no Dirichlet tags; zero-flux Neumann is the
-    # natural BC and contributes nothing to b. When future problems introduce
-    # Dirichlet, extend boundary_conditions() handling here.
+    # --- BCs (Dirichlet) ----------------------------------------------------
     bcs = problem.boundary_conditions()
-    if bcs:
-        raise NotImplementedError(
-            "Dirichlet BC handling is deferred to Problem 2's submission; "
-            f"problem returned tags {list(bcs)}"
-        )
+    dirichlet_dofs, dirichlet_values = _resolve_dirichlet_dofs(basis, bcs)
+    has_dirichlet = dirichlet_dofs.size > 0
 
-    # --- Nullspace pin ------------------------------------------------------
-    # architecture.md § Nullspace handling: caller declares pin_point(); the
-    # solver pins the nearest node to exact_solution(*pin_point). No default,
-    # no fallback - returning None means "Dirichlet present, no pin needed".
-    pin_point = problem.pin_point()
-    if pin_point is None:
-        raise ValueError(
-            "Problem 1 has no Dirichlet BCs and requires a pin_point(); got None"
-        )
-    pin_dof = _nearest_node_dof(basis, pin_point)
-    pin_value = float(
-        problem.exact_solution(np.array([pin_point[0]]), np.array([pin_point[1]]))[0]
-    )
+    # --- Nullspace pin (only if no Dirichlet) -------------------------------
+    # architecture.md § Nullspace handling rule 1: pin iff no Dirichlet
+    # exists. With Dirichlet present, the operator is non-singular on its own.
     x = np.zeros(basis.N)
-    x[pin_dof] = pin_value
-    logger.debug("pinning DOF %d to T=%.6f at %s", pin_dof, pin_value, pin_point)
+    constrained_dofs: list[np.ndarray] = []
+    pin_dof: int | None = None
+    if dirichlet_dofs.size:
+        x[dirichlet_dofs] = dirichlet_values
+        constrained_dofs.append(dirichlet_dofs)
+
+    if not has_dirichlet:
+        pin_point = problem.pin_point()
+        if pin_point is None:
+            raise ValueError(
+                "Pure-Neumann problem requires a pin_point() to remove the "
+                "constant nullspace; problem returned None."
+            )
+        pin_dof = _nearest_node_dof(basis, pin_point)
+        pin_value = float(
+            problem.exact_solution(
+                np.array([pin_point[0]]), np.array([pin_point[1]])
+            )[0]
+        )
+        x[pin_dof] = pin_value
+        constrained_dofs.append(np.array([pin_dof]))
+        logger.debug(
+            "pinning DOF %d to T=%.6f at %s", pin_dof, pin_value, pin_point
+        )
+    else:
+        # Defensive sanity check: if pin_point() returns a coordinate while
+        # Dirichlet is present, the Problem is internally inconsistent.
+        if problem.pin_point() is not None:
+            raise ValueError(
+                "Problem declared Dirichlet BCs AND a pin_point(); rule 1 "
+                "says pin iff no Dirichlet present. Pick one."
+            )
+
+    D = np.concatenate(constrained_dofs) if constrained_dofs else np.array([], dtype=np.int64)
 
     # --- Solve --------------------------------------------------------------
-    solution = solve(*condense(A, b, x=x, D=np.array([pin_dof])))
+    solution = solve(*condense(A, b, x=x, D=D))
 
     return SolverResult(
         solution=solution,
