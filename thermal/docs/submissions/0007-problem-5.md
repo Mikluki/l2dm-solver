@@ -22,9 +22,11 @@ Implement `verification.md` § Problem 5 and the tests that exercise it. The sub
 
 2. **Inverted-assertion bounds: $1.2 \le r_{L^2} \le 1.5$, both sides asserted.** Upper-bound failure is the load-bearing inverted case (the rate-fitter is dishonestly reporting smooth convergence). Lower-bound failure means either the fitter is broken or the mesh is too coarse to be in the asymptotic regime — either of which invalidates Problem 5 as a harness check. Artifact bundle records *which* bound blew up so the diagnosis is one-step.
 
-3. **Singular-solution polar convention.** Reentrant corner at $(1/2, 1/2)$. Define $\hat{x}=x-1/2$, $\hat{y}=y-1/2$, $r=\sqrt{\hat{x}^2+\hat{y}^2}$. Angle $\theta$ measured **clockwise** through the L-shape interior, $\theta=0$ along the edge $(1/2,1/2)\to(1,1/2)$, $\theta=3\pi/2$ along $(1/2,1/2)\to(1/2,1)$. Closed form:
-   $$\theta = \begin{cases} -\operatorname{atan2}(\hat{y}, \hat{x}), & \hat{y} \le 0 \\ 2\pi - \operatorname{atan2}(\hat{y}, \hat{x}), & \hat{y} > 0 \end{cases}$$
+3. **Singular-solution polar convention.** Reentrant corner at $(1/2, 1/2)$. Define $\hat{x}=x-1/2$, $\hat{y}=y-1/2$, $r=\sqrt{\hat{x}^2+\hat{y}^2}$. Angle $\theta$ measured **clockwise** through the L-shape interior, valued in $[0, 2\pi)$: $\theta=0$ along the edge $(1/2,1/2)\to(1,1/2)$, $\theta=3\pi/2$ along $(1/2,1/2)\to(1/2,1)$. Closed form:
+   $$\theta = (-\operatorname{atan2}(\hat{y}, \hat{x})) \bmod 2\pi$$
    $T(x,y) = r^{2/3}\sin(2\theta/3)$ then vanishes on both edges meeting at the reentrant corner and grows like $r^{2/3}$ elsewhere.
+
+   **Why modular, not piecewise.** An earlier draft of this decision used a piecewise form split on $\hat{y} \le 0$ vs $\hat{y} > 0$. That form returns $-\pi$ at $(\hat{x}<0, \hat{y}=0)$ — the West-edge midpoint $(0, 1/2)$ — because the $\hat{y} \le 0$ branch evaluates $-\operatorname{atan2}(0, -0.5) = -\pi$ rather than the geometric limit $+\pi$. The sign flip propagates into $\sin(2\theta/3)$ and mis-sets one Dirichlet value if any mesh node lands on that point. The modular form `(-atan2) mod 2π` folds correctly at the branch and matches the geometric limit everywhere.
 
 4. **Boundary tagging.** All six edges as named physical curves. Two of them — the cut edges meeting at the reentrant corner — get `DirichletBC(value=0.0)` (scalar, because the exact solution is identically zero there). The remaining four — the outer perimeter of the L — get `DirichletBC(value=<callable>)`, where the callable returns $T(x,y)$ evaluated pointwise. Using the scalar form on the two cut edges (rather than a callable that happens to return zero) keeps the *callable* code path exercised only by the four nonzero edges, sharpening diagnosis when the new pathway misbehaves.
 
