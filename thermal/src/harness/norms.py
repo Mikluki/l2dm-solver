@@ -42,14 +42,14 @@ def l2_error(
 ) -> float:
     """L^2 error between the discrete solution and ``exact``.
 
-    Exact values are sampled at quadrature points via ``basis.interpolate`` on
-    a nodal projection; for smooth solutions and a P1 basis the projection
-    error is dominated by the discrete-solution error and does not pollute
-    the convergence rate.
+    The analytic exact solution is evaluated directly at the basis quadrature
+    points. This is an FE quadrature norm, matching the assembly quadrature,
+    without first projecting ``exact`` into the P1 space.
     """
-    nodal_exact = exact(basis.mesh.p[0], basis.mesh.p[1])
+    qpts = basis.global_coordinates()
+    qpts_arr = np.asarray(qpts)
     uh = basis.interpolate(solution)
-    uex = basis.interpolate(nodal_exact)
+    uex = exact(qpts_arr[0], qpts_arr[1])
     val = _l2_squared.assemble(basis, uh=uh, uex=uex)
     return float(np.sqrt(val))
 

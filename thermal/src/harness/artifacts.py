@@ -53,15 +53,29 @@ def emit_failure_artifacts(
     # --- finest-mesh error field plot --------------------------------------
     finest = study.levels[-1]
     mesh = finest.basis.mesh
-    nodal_exact = exact_solution(mesh.p[0], mesh.p[1])
-    err = finest.solution - nodal_exact
+    qpts = np.asarray(finest.basis.global_coordinates())
+    uh_qp = np.asarray(finest.basis.interpolate(finest.solution))
+    exact_qp = exact_solution(qpts[0], qpts[1])
+    err_qp = uh_qp - exact_qp
+
+    weights = finest.basis.dx
+    elem_rms_err = np.sqrt(
+        np.sum(err_qp**2 * weights, axis=1) / np.sum(weights, axis=1)
+    )
 
     fig, ax = plt.subplots(figsize=(6, 5))
-    tcf = ax.tricontourf(mesh.p[0], mesh.p[1], mesh.t.T, err, levels=21, cmap="RdBu_r")
-    fig.colorbar(tcf, ax=ax, label="T_h - T_exact")
+    tpc = ax.tripcolor(
+        mesh.p[0],
+        mesh.p[1],
+        mesh.t.T,
+        facecolors=elem_rms_err,
+        shading="flat",
+        cmap="magma",
+    )
+    fig.colorbar(tpc, ax=ax, label="quadrature RMS |T_h - T_exact|")
     ax.set_aspect("equal")
     ax.set_title(
-        f"Error field, h={finest.mesh_size:.3g}, "
+        f"Quadrature RMS error, h={finest.mesh_size:.3g}, "
         f"L2={finest.l2_error:.2e}, H1={finest.h1_error:.2e}"
     )
     ax.set_xlabel("x")
