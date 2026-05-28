@@ -123,6 +123,7 @@ Five source modules. If any grows past one file's worth of code, that's its own 
 One line each. These are authoritative; the bullet *is* the decision, not a summary of one elsewhere. Adding or changing an entry needs human approval.
 
 - **Stack.** scikit-fem + gmsh + meshio + pytest. Pure-Python, no compiled deps, suits agentic dev introspection.
+- **Geometry kernel.** gmsh OCC kernel for all geometry builders. The geo kernel is no longer used; `rectangle_split` migrated to OCC as a precursor to 0006. Curved-boundary geometries rely on OCC `fragment` to produce conforming shared edges (ADR-0003 mesh-alignment). Tags after `fragment` are queried via the returned map, never hard-coded.
 - **Element order.** P1 Lagrange throughout Part 1. P2 deferred to Part 2 if singular-quadrature accuracy demands it.
 - **Material interfaces.** All mesh-aligned (gmsh feature edges enforce alignment).
 - **Coefficient representation.** $\kappa$ as a P0 field, indexed per element from the subdomain tag.

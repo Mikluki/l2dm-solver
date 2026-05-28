@@ -130,16 +130,26 @@ def test_problem_02_kappa2_sweep_hits_cache(mesh_cache_dir: Path) -> None:
     """Brief acceptance #6: varying kappa_2 must not add new .msh files.
 
     kappa is not a geometry parameter, so the ADR-0007 cache key must depend
-    only on (geometry_name, mesh_size, height). Sweeping kappa_2 at fixed h
-    therefore produces zero cache misses after the first instantiation.
+    only on (geometry_name, mesh_size, height). Sweeping kappa_2 across every
+    declared mesh size therefore produces zero cache misses after the first
+    pass. Walking the full mesh_sizes() list (not just the finest) guards
+    against a partial leak that would only fire at one resolution.
     """
-    finest_h = min(Problem02Slab().mesh_sizes())
-    # Warm the cache with one kappa_2 value.
-    solve_scalar(Problem02Slab(kappa_2=KAPPA_2_SWEEP[0]), finest_h, mesh_cache_dir=mesh_cache_dir)
+    sizes = list(Problem02Slab().mesh_sizes())
+    # Warm the cache: one full mesh-size pass at the first kappa_2.
+    for h in sizes:
+        solve_scalar(
+            Problem02Slab(kappa_2=KAPPA_2_SWEEP[0]),
+            h,
+            mesh_cache_dir=mesh_cache_dir,
+        )
     before = {p.name: p.stat().st_mtime_ns for p in mesh_cache_dir.glob("*.msh")}
-    # Sweep the remaining values; none should touch the .msh cache.
+    # Sweep remaining kappa_2 across every mesh size; none should touch cache.
     for k2 in KAPPA_2_SWEEP[1:]:
-        solve_scalar(Problem02Slab(kappa_2=k2), finest_h, mesh_cache_dir=mesh_cache_dir)
+        for h in sizes:
+            solve_scalar(
+                Problem02Slab(kappa_2=k2), h, mesh_cache_dir=mesh_cache_dir
+            )
     after = {p.name: p.stat().st_mtime_ns for p in mesh_cache_dir.glob("*.msh")}
     assert after == before, (
         f"kappa_2 sweep produced cache misses: before={sorted(before)}, "
