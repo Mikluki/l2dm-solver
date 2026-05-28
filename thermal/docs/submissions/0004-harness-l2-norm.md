@@ -1,7 +1,7 @@
 # Submission 0004 — Harness L² norm correctness
 
 **Status:** done
-**Predecessors:** 0003 (accepted, but its acceptance #2 "convergence honest" did not hold — see § Why).
+**Predecessors:** 0003
 **Successors:** every future verification problem; the corrected norm is what they measure against.
 
 ## Goal

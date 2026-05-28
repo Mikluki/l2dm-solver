@@ -32,6 +32,10 @@ from src.geometry.disk_in_disk import (
     DiskInDiskSpec,
     materialise as materialise_disk_in_disk,
 )
+from src.geometry.l_shape import (
+    LShapeSpec,
+    materialise as materialise_l_shape,
+)
 from src.geometry.rectangle_split import (
     RectangleSplitSpec,
     materialise as materialise_rectangle_split,
@@ -111,6 +115,8 @@ def _materialise_geometry(spec: Any, cache_dir: Path) -> Path:
         return materialise_rectangle_split(spec, cache_dir)
     if isinstance(spec, DiskInDiskSpec):
         return materialise_disk_in_disk(spec, cache_dir)
+    if isinstance(spec, LShapeSpec):
+        return materialise_l_shape(spec, cache_dir)
     raise TypeError(f"unsupported geometry spec: {type(spec).__name__}")
 
 
@@ -174,9 +180,11 @@ def _resolve_dirichlet_dofs(
     """Return (dirichlet_dof_indices, values_for_those_dofs).
 
     Each boundary name in ``bcs`` is looked up in ``mesh.boundaries`` and
-    converted to a DOF-index array via ``basis.get_dofs(facets=...)``. Only
-    ``DirichletBC(value: float)`` is supported in Part 1; callable Dirichlet
-    and inhomogeneous Neumann are deferred (Protocol contract).
+    converted to a DOF-index array via ``basis.get_dofs(facets=...)``. Two BC
+    payloads are supported: ``DirichletBC(value: float)`` broadcasts a scalar
+    to every boundary DOF (Problems 1-3); ``DirichletBC(value=callable)`` is
+    evaluated at each DOF's physical coordinate (Problem 5, per submission 0007
+    § Decisions 1). Inhomogeneous Neumann is still deferred.
     """
     if not bcs:
         return np.array([], dtype=np.int64), np.array([], dtype=float)
@@ -202,9 +210,25 @@ def _resolve_dirichlet_dofs(
                 f"Dirichlet boundary {name!r} not in mesh.boundaries "
                 f"(available: {list(mesh.boundaries)})"
             )
-        dofs = basis.get_dofs(facets=mesh.boundaries[name]).flatten()
-        dof_chunks.append(np.asarray(dofs, dtype=np.int64))
-        value_chunks.append(np.full(dofs.shape, float(spec.value)))
+        dofs = np.asarray(
+            basis.get_dofs(facets=mesh.boundaries[name]).flatten(),
+            dtype=np.int64,
+        )
+        if callable(spec.value):
+            # Evaluate the callable at the physical coordinates of the
+            # boundary DOFs. For P1 elements there is one DOF per mesh node,
+            # so basis.mesh.p[:, dofs] gives the (x, y) per DOF directly.
+            coords = basis.mesh.p[:, dofs]
+            values = np.asarray(spec.value(coords[0], coords[1]), dtype=float)
+            if values.shape != dofs.shape:
+                raise ValueError(
+                    f"Dirichlet callable for {name!r} returned shape "
+                    f"{values.shape}; expected {dofs.shape}."
+                )
+        else:
+            values = np.full(dofs.shape, float(spec.value))
+        dof_chunks.append(dofs)
+        value_chunks.append(values)
 
     all_dofs = np.concatenate(dof_chunks)
     all_values = np.concatenate(value_chunks)

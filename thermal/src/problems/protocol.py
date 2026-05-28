@@ -19,15 +19,19 @@ import numpy as np
 
 @dataclass(frozen=True)
 class DirichletBC:
-    """Homogeneous-or-constant Dirichlet boundary condition.
+    """Constant- or callable-valued Dirichlet boundary condition.
 
-    Only the scalar ``value`` form is supported in Part 1; callable-valued
-    Dirichlet (needed by Problem 5) and inhomogeneous Neumann are deferred
-    until a problem actually exercises them. Boundary tags absent from
+    ``value`` is either a scalar (broadcast onto every boundary DOF) or a
+    callable evaluated at the boundary DOFs' physical coordinates
+    (``value(x, y) -> np.ndarray``, vectorized). The scalar path is what
+    Problems 1-3 use; the callable path is exercised by Problem 5 (inverted
+    rate assertion on the L-shape singular solution) per submission 0007 §
+    Decisions 1. Inhomogeneous Neumann is still deferred - no problem in the
+    queue exercises it. Boundary tags absent from
     ``Problem.boundary_conditions()`` are natural zero-flux Neumann.
     """
 
-    value: float
+    value: float | Callable[[np.ndarray, np.ndarray], np.ndarray]
 
 
 # ============================================================================

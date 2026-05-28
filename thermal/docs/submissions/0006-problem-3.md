@@ -1,6 +1,6 @@
 # Submission 0006 — Problem 3 (radially symmetric disk in disk)
 
-**Status:** accepted
+**Status:** done
 **Predecessors:** 0004 done
 **Successors:** Problem 4 (multi-disk extends the disk-in-disk OCC pattern); any Part 2 curved-substrate geometry.
 

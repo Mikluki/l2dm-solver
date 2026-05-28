@@ -29,6 +29,7 @@ if str(_PROJECT_ROOT) not in sys.path:
 from src.harness.study import run_refinement_study  # noqa: E402
 from src.problems.problem_01_manufactured import Problem01Manufactured  # noqa: E402
 from src.problems.problem_02_slab import Problem02Slab  # noqa: E402
+from src.problems.problem_03_disk import Problem03Disk  # noqa: E402
 from src.solver.solve_scalar import solve_scalar  # noqa: E402
 
 logger = logging.getLogger("inspect")
@@ -44,6 +45,7 @@ ARTIFACT_ROOT = _PROJECT_ROOT / "artifacts" / "inspect"
 PROBLEMS: dict[str, type] = {
     "problem_01": Problem01Manufactured,
     "problem_02": Problem02Slab,
+    "problem_03": Problem03Disk,
 }
 
 
@@ -201,20 +203,36 @@ def _panel_convergence(ax, study, problem_name: str) -> None:
 # ============================================================================
 
 
-def _interface_x_or_none(problem) -> float | None:
-    """Return the vertical interface x-coordinate, if the problem has one.
+def _annotate_interface(err_panel, problem, mesh) -> None:
+    """Mark the material interface on the error panel (inspector.md Rule 6).
 
-    Problem 2 has a derivative kink at x=1/2; the error panel annotates it
-    so the visible structure reads as theory-confirming (inspector.md Rule
-    6). When a third problem grows its own interface, replace this isinstance
-    branch with a Protocol-level accessor; one if-statement is not worth a
-    hook system yet.
+    Problem 2: vertical kink line at x=1/2 (axis-aligned subdomain split).
+    Problem 3: circle at r=R_inner (curved subdomain split, where P1 error
+    typically concentrates in an annular shell - verification.md § Problem 3).
+    No-op when the problem has no interface (Problem 1). Three branches is
+    still not worth a Protocol-level accessor; if a fourth problem grows an
+    interface of yet another shape, that's the time to refactor.
     """
     if isinstance(problem, Problem02Slab):
         from src.geometry.rectangle_split import _X_INTERFACE  # local import
 
-        return float(_X_INTERFACE)
-    return None
+        x_iface = float(_X_INTERFACE)
+        y_lo, y_hi = float(mesh.p[1].min()), float(mesh.p[1].max())
+        err_panel.plot(
+            [x_iface, x_iface], [y_lo, y_hi],
+            color="black", linestyle="--", linewidth=1.0,
+            label=rf"interface $x={x_iface:g}$ (kink)",
+        )
+    elif isinstance(problem, Problem03Disk):
+        from src.problems.problem_03_disk import _R_INNER  # local import
+
+        r_iface = float(_R_INNER)
+        theta = np.linspace(0.0, 2.0 * np.pi, 256)
+        err_panel.plot(
+            r_iface * np.cos(theta), r_iface * np.sin(theta),
+            color="black", linestyle="--", linewidth=1.0,
+            label=rf"interface $r={r_iface:g}$ ($\kappa$ jump)",
+        )
 
 
 def _two_panel_layout(mesh) -> tuple[tuple[int, int], tuple[float, float]]:
@@ -319,19 +337,11 @@ def _emit_dashboard(out_dir: Path, problem, mesh_size: float) -> None:
         marker="x", markersize=10, color="black", markeredgewidth=2,
         linestyle="none", label=f"max |err| = {abs(err_vals[imax]):.2e}",
     )
-    # Problem-specific Rule-6 annotation: Problem 2's exact solution has a
-    # derivative kink at x=1/2 where the parabolic left region meets the
-    # constant right region. The P1 error field shows structure aligned with
-    # the interface; drawing the line tells the reader "this is the kink,
-    # not a bug" before they propose investigating it.
-    interface_x = _interface_x_or_none(problem)
-    if interface_x is not None:
-        y_lo, y_hi = float(mesh.p[1].min()), float(mesh.p[1].max())
-        err_panel.plot(
-            [interface_x, interface_x], [y_lo, y_hi],
-            color="black", linestyle="--", linewidth=1.0,
-            label=rf"interface $x={interface_x:g}$ (kink)",
-        )
+    # Problem-specific Rule-6 annotation: mark the material interface so the
+    # error structure aligned with it reads as theory-confirming (Problem 2: a
+    # derivative kink at x=1/2; Problem 3: an annular shell at r=R_inner). The
+    # marker tells the reader "this is the interface, not a bug".
+    _annotate_interface(err_panel, problem, mesh)
     err_panel.legend(loc="upper right", fontsize=7, framealpha=0.85)
     fig.suptitle(
         f"diagnostic  ::  {base_suptitle}  |  $\\|T_h - T\\|_\\infty$ = {err_max:.3e}",
