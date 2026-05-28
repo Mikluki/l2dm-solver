@@ -144,8 +144,12 @@ from skfem.helpers import grad, dot
 basis = Basis(mesh, ElementTriP1())
 basis_p0 = basis.with_element(ElementTriP0())
 
-# kappa as a P0 field, one value per element
-kappa_values = np.array([problem.kappa(tag) for tag in mesh.subdomains_per_element])
+# kappa as a P0 field, one value per element. Subdomain assignment uses
+# the gmsh physical-group *name* (the key in mesh.subdomains), never the
+# element-centroid coordinate (ADR-0003).
+kappa_values = np.full(mesh.t.shape[1], np.nan)
+for name, element_ids in mesh.subdomains.items():
+    kappa_values[element_ids] = problem.kappa(name)
 
 @BilinearForm
 def stiffness(u, v, w):
