@@ -28,6 +28,7 @@ if str(_PROJECT_ROOT) not in sys.path:
 
 from src.harness.study import run_refinement_study  # noqa: E402
 from src.problems.problem_01_manufactured import Problem01Manufactured  # noqa: E402
+from src.problems.problem_02_slab import Problem02Slab  # noqa: E402
 from src.solver.solve_scalar import solve_scalar  # noqa: E402
 
 logger = logging.getLogger("inspect")
@@ -42,6 +43,7 @@ ARTIFACT_ROOT = _PROJECT_ROOT / "artifacts" / "inspect"
 # Registry. New problems land here when their submission accepts.
 PROBLEMS: dict[str, type] = {
     "problem_01": Problem01Manufactured,
+    "problem_02": Problem02Slab,
 }
 
 
@@ -129,20 +131,18 @@ def _panel_kappa(ax, mesh, problem) -> None:
     subdomains = getattr(mesh, "subdomains", None) or {}
     n_elem = mesh.t.shape[1]
     kappa = np.full(n_elem, np.nan)
-    # Walk real surface tags; skip gmsh metadata leaks.
+    # Walk real surface tags; skip gmsh metadata leaks. Dispatch by name to
+    # mirror src/solver/solve_scalar.py:_build_kappa_p0_values - Problem.kappa
+    # takes the subdomain name string, not an integer tag.
     for name, idx in subdomains.items():
         if name.startswith("gmsh:"):
             continue
-        # Problem.kappa is indexed by tag, not by name. Fallback: tag = 1
-        # for Problem 1's single subdomain. When Problem 2 adds the real
-        # tag->name map, this dispatch evolves with it.
-        try:
-            value = float(problem.kappa(1))
-        except Exception:  # noqa: BLE001
-            value = 1.0
-        kappa[idx] = value
+        kappa[idx] = float(problem.kappa(name))
     if np.isnan(kappa).any():
-        kappa = np.nan_to_num(kappa, nan=float(problem.kappa(1)))
+        # No real subdomain tags exported (single-region geometries with no
+        # physical groups). Fall back to a single Problem.kappa("") call,
+        # mirroring the solver's no-tags branch.
+        kappa = np.nan_to_num(kappa, nan=float(problem.kappa("")))
 
     kmin, kmax = float(kappa.min()), float(kappa.max())
     is_uniform = np.isclose(kmin, kmax)
@@ -201,38 +201,103 @@ def _panel_convergence(ax, study, problem_name: str) -> None:
 # ============================================================================
 
 
+def _interface_x_or_none(problem) -> float | None:
+    """Return the vertical interface x-coordinate, if the problem has one.
+
+    Problem 2 has a derivative kink at x=1/2; the error panel annotates it
+    so the visible structure reads as theory-confirming (inspector.md Rule
+    6). When a third problem grows its own interface, replace this isinstance
+    branch with a Protocol-level accessor; one if-statement is not worth a
+    hook system yet.
+    """
+    if isinstance(problem, Problem02Slab):
+        from src.geometry.rectangle_split import _X_INTERFACE  # local import
+
+        return float(_X_INTERFACE)
+    return None
+
+
+def _two_panel_layout(mesh) -> tuple[tuple[int, int], tuple[float, float]]:
+    """Pick (nrows, ncols) and figsize so a two-panel figure stays legible.
+
+    Wide-and-flat geometries (Problem 2's 1x0.1 slab) are unreadable when
+    panels sit side-by-side: ax.set_aspect("equal") crushes them next to
+    their colorbars. Stacking vertically gives each panel the full figure
+    width. For roughly-square geometries (Problem 1's unit square),
+    side-by-side reads more naturally.
+    """
+    xspan = float(np.ptp(mesh.p[0]))
+    yspan = float(np.ptp(mesh.p[1]))
+    if xspan / max(yspan, 1e-12) > 3.0:
+        return (2, 1), (11.0, 5.5)
+    return (1, 2), (12.0, 5.0)
+
+
+def _save(fig, out: Path) -> None:
+    fig.savefig(out, dpi=130, bbox_inches="tight")
+    plt.close(fig)
+    logger.info("wrote %s", out)
+
+
 def _emit_dashboard(out_dir: Path, problem, mesh_size: float) -> None:
-    """Run one solve at ``mesh_size`` and render the 2x3 input-output dashboard."""
+    """Run one solve at ``mesh_size`` and render three two-panel PNGs.
+
+    Split into setup (mesh + kappa), problem statement (source + exact),
+    and result (computed + pointwise error). The 2x3 single-figure layout
+    is unreadable for wide-flat geometries; the split also reads better
+    when a panel is shown standalone in a writeup.
+    """
     sr = solve_scalar(problem, mesh_size)
     mesh = sr.basis.mesh
     x, y = mesh.p[0], mesh.p[1]
     source_vals = problem.source(x, y)
     exact_vals = problem.exact_solution(x, y)
     err_vals = sr.solution - exact_vals
+    err_max = float(np.max(np.abs(err_vals)))
 
-    fig, axes = plt.subplots(2, 3, figsize=(16, 10))
-    _panel_mesh(axes[0, 0], mesh, sr.pin_dof)
+    shape, figsize = _two_panel_layout(mesh)
+    base_suptitle = f"{problem.name}  |  h = {mesh_size:.4g}  |  non-dimensional verification"
+
+    # --- 01_setup: mesh + kappa --------------------------------------------
+    fig, axes = plt.subplots(*shape, figsize=figsize)
+    _panel_mesh(axes[0], mesh, sr.pin_dof)
+    _panel_kappa(axes[1], mesh, problem)
+    fig.suptitle(f"setup  ::  {base_suptitle}", fontsize=12)
+    fig.tight_layout(rect=(0, 0, 1, 0.95))
+    _save(fig, out_dir / "01_setup.png")
+
+    # --- 02_solution: exact vs computed ------------------------------------
+    # Same colormap and (implicit) same value range - the comparison is
+    # apples-to-apples by construction since T_h is converging to T.
+    fig, axes = plt.subplots(*shape, figsize=figsize)
     _panel_field(
-        axes[0, 1], mesh, source_vals,
-        title=r"source $Q(x, y)$  (PDE right-hand side)",
-        cbar_label=rf"$Q$  {_DIM}",
-        cmap="magma",
-    )
-    _panel_kappa(axes[0, 2], mesh, problem)
-    _panel_field(
-        axes[1, 0], mesh, exact_vals,
+        axes[0], mesh, exact_vals,
         title=r"exact $T(x, y)$  (manufactured solution)",
         cbar_label=rf"$T$  {_DIM}",
         cmap="viridis",
     )
     _panel_field(
-        axes[1, 1], mesh, sr.solution,
+        axes[1], mesh, sr.solution,
         title=r"computed $T_h(x, y)$  (P1 FEM)",
         cbar_label=rf"$T_h$  {_DIM}",
         cmap="viridis",
     )
+    fig.suptitle(f"solution  ::  {base_suptitle}", fontsize=12)
+    fig.tight_layout(rect=(0, 0, 1, 0.95))
+    _save(fig, out_dir / "02_solution.png")
+
+    # --- 03_diagnostic: source + pointwise error ---------------------------
+    # Both are scalar fields with similar visual weight; pairing them puts
+    # "what was the PDE driving" next to "how far off is the discretization".
+    fig, axes = plt.subplots(*shape, figsize=figsize)
     _panel_field(
-        axes[1, 2], mesh, err_vals,
+        axes[0], mesh, source_vals,
+        title=r"source $Q(x, y)$  (PDE right-hand side)",
+        cbar_label=rf"$Q$  {_DIM}",
+        cmap="magma",
+    )
+    _panel_field(
+        axes[1], mesh, err_vals,
         title=r"pointwise error $T_h - T$",
         cbar_label=rf"$T_h - T$  {_DIM}",
         cmap="RdBu_r", symmetric=True,
@@ -241,7 +306,7 @@ def _emit_dashboard(out_dir: Path, problem, mesh_size: float) -> None:
     # construction) and 'x' at the |error| max. The visible asymmetry of the
     # field is the pin doing its job - without these markers the reader has
     # to recompute it.
-    err_panel = axes[1, 2]
+    err_panel = axes[1]
     if sr.pin_dof is not None:
         err_panel.plot(
             mesh.p[0, sr.pin_dof], mesh.p[1, sr.pin_dof],
@@ -254,19 +319,26 @@ def _emit_dashboard(out_dir: Path, problem, mesh_size: float) -> None:
         marker="x", markersize=10, color="black", markeredgewidth=2,
         linestyle="none", label=f"max |err| = {abs(err_vals[imax]):.2e}",
     )
+    # Problem-specific Rule-6 annotation: Problem 2's exact solution has a
+    # derivative kink at x=1/2 where the parabolic left region meets the
+    # constant right region. The P1 error field shows structure aligned with
+    # the interface; drawing the line tells the reader "this is the kink,
+    # not a bug" before they propose investigating it.
+    interface_x = _interface_x_or_none(problem)
+    if interface_x is not None:
+        y_lo, y_hi = float(mesh.p[1].min()), float(mesh.p[1].max())
+        err_panel.plot(
+            [interface_x, interface_x], [y_lo, y_hi],
+            color="black", linestyle="--", linewidth=1.0,
+            label=rf"interface $x={interface_x:g}$ (kink)",
+        )
     err_panel.legend(loc="upper right", fontsize=7, framealpha=0.85)
-    err_max = float(np.max(np.abs(err_vals)))
     fig.suptitle(
-        f"{problem.name}  |  h = {mesh_size:.4g}  |  "
-        f"$\\|T_h - T\\|_\\infty$ = {err_max:.3e}  |  "
-        f"non-dimensional verification",
-        fontsize=13,
+        f"diagnostic  ::  {base_suptitle}  |  $\\|T_h - T\\|_\\infty$ = {err_max:.3e}",
+        fontsize=12,
     )
-    fig.tight_layout(rect=(0, 0, 1, 0.96))
-    out = out_dir / "dashboard.png"
-    fig.savefig(out, dpi=130, bbox_inches="tight")
-    plt.close(fig)
-    logger.info("wrote %s", out)
+    fig.tight_layout(rect=(0, 0, 1, 0.95))
+    _save(fig, out_dir / "03_diagnostic.png")
 
 
 def _emit_convergence(out_dir: Path, problem) -> None:
