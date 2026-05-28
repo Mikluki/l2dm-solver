@@ -11,6 +11,8 @@ The four core docs in `docs/` are the source of truth for this project. Do not w
 
 Submissions live in `docs/submissions/`. Algebraic derivations live in `docs/derivations/`. `docs/inspector.md` carries conventions for tasks touching `scripts/inspect.py` and `scripts/diagnose.py` — pull only when working on those.
 
+If you are an Opus model delegate simple tasks to cheaper models to save on tokens.
+
 ---
 
 ## Project disposition
@@ -150,9 +152,10 @@ Never create bloat files. Every markdown file is a maintenance burden.
 
 ### Doc-editing rules
 
-- **Agent may edit:** `docs/open-questions.md` (append questions, mark resolved), `docs/submissions/` (create new briefs, update status of in-flight ones), `docs/derivations/` (append derivations referenced by a submission).
+- **Agent may edit:** `docs/open-questions.md` (append questions, mark resolved), `docs/submissions/` (create new briefs), `docs/derivations/` (append derivations referenced by a submission).
 - **Agent must propose, human approves:** `docs/architecture.md` (any structural change, including additions to § Key decisions), `docs/inspector.md` (any rule change — these are rules-from-incident).
 - **Human-owned, agent must not silently edit:** `docs/physics.md`, `docs/verification.md`. If the agent believes either is wrong or incomplete, raise it in `docs/open-questions.md` and stop.
+- **Human** will edit statuses do not track them
 
 ---
 

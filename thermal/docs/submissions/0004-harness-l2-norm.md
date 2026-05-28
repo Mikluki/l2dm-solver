@@ -49,13 +49,6 @@ Without the fix, no future verification problem's L² rate can be trusted on any
 
 The assembly shape of the corrected form: one new `Functional` that takes both `w.uh` and an `exact_at_qp` array, or an extension of the existing `_l2_squared`. Either is acceptable provided the quadrature scheme matches `h1_seminorm_error`.
 
-## Out of scope
-
-- Test threshold *values*.
-- The H¹ path (already correct).
-- The small 0003 follow-ups: `LevelResult.pin_dof` annotation, unused `y` params, unused `pytest` import, retroactive `int → str` amendment of 0003 § Decisions resolved 2. Bundle separately or roll into this submission's cleanup as the worker prefers — they are surgical and do not affect this submission's load-bearing acceptance.
-- Anything in `architecture.md` § Out of scope.
-
 ## Done
 
 Acceptance passes; status moves to `accepted`. If Problem 1 or Problem 2 fails the rate window under the corrected norm, status stays `in-progress` and the failure is logged in `docs/open-questions.md` with the corrected error table attached. 0003's status (currently `accepted`) reflects the prior acceptance under the defective norm; whether to revert it to `in-progress` is the planner's call and not gated by this submission.

@@ -34,6 +34,3 @@ Worker decisions worth knowing:
 
 One-line edit to `architecture.md` § Coefficient handling: code example updated to iterate `mesh.subdomains.items()` and key by string name (was referencing a non-existent `mesh.subdomains_per_element` attribute).
 
-## Out of scope
-
-Problems 3–5; callable Dirichlet; inhomogeneous Neumann; iterative solvers; validation against ⟨κ⟩; anything in `architecture.md` § Out of scope.

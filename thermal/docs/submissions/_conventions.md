@@ -14,8 +14,6 @@ Every brief opens with:
 
 Status lifecycle:
 - `proposed` — drafted, awaiting planner sign-off.
-- `accepted` — planner approved; worker may implement.
-- `in-progress` — implementation started but acceptance held by a discrepancy needing human adjudication. See 0002.
 - `done` — acceptance passes; brief is historical from here.
 
 Predecessor/successor links are append-only.
