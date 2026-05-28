@@ -30,7 +30,7 @@ class LevelResult:
 
     mesh_size: float
     n_dofs: int
-    pin_dof: int
+    pin_dof: int | None
     l2_error: float
     h1_error: float
     solution: np.ndarray

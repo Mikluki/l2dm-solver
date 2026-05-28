@@ -28,6 +28,10 @@ from skfem import (
 from skfem.helpers import dot, grad
 from skfem.io.meshio import from_meshio
 
+from src.geometry.disk_in_disk import (
+    DiskInDiskSpec,
+    materialise as materialise_disk_in_disk,
+)
 from src.geometry.rectangle_split import (
     RectangleSplitSpec,
     materialise as materialise_rectangle_split,
@@ -105,6 +109,8 @@ def _materialise_geometry(spec: Any, cache_dir: Path) -> Path:
         return materialise_unit_square(spec, cache_dir)
     if isinstance(spec, RectangleSplitSpec):
         return materialise_rectangle_split(spec, cache_dir)
+    if isinstance(spec, DiskInDiskSpec):
+        return materialise_disk_in_disk(spec, cache_dir)
     raise TypeError(f"unsupported geometry spec: {type(spec).__name__}")
 
 
@@ -202,10 +208,11 @@ def _resolve_dirichlet_dofs(
 
     all_dofs = np.concatenate(dof_chunks)
     all_values = np.concatenate(value_chunks)
-    # Deduplicate corner DOFs that belong to two named edges; keep the first
-    # value seen. For homogeneous Dirichlet (the only Part-1 case) this is
-    # moot but defended explicitly so a future inhomogeneous case fails loud
-    # if two declared edges disagree at a shared corner.
+    # Deduplicate corner DOFs that belong to two named edges; silently keep
+    # the first value seen. Moot for the only Part-1 case (homogeneous
+    # Dirichlet, where every chunk's value is identical anyway). If an
+    # inhomogeneous Dirichlet problem is added later, this needs to grow a
+    # consistency check that raises when two edges disagree at a shared corner.
     unique_dofs, first_idx = np.unique(all_dofs, return_index=True)
     return unique_dofs, all_values[first_idx]
 
