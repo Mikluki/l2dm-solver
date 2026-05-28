@@ -9,7 +9,7 @@ The four core docs in `docs/` are the source of truth for this project. Do not w
 - **`docs/architecture.md`** — stack, module layout, key abstractions, decisions, out-of-scope.
 - **`docs/open-questions.md`** — live questions with resolution criteria.
 
-Decisions live in `docs/decisions/` as numbered ADRs. Submissions live in `docs/submissions/`.
+Submissions live in `docs/submissions/`. Algebraic derivations live in `docs/derivations/`. `docs/inspector.md` carries guidance for tasks touching `scripts/inspect.py` and `scripts/diagnose.py` — pull only when working on those.
 
 ---
 
@@ -45,7 +45,7 @@ When in doubt, ask: does this make the harness more trustworthy, or does it make
   ```python
   # ABOUTME: <one-paragraph description of file purpose, I/O, side effects>
   ```
-- Caching is mandatory for heavy computation. Mesh generation is the dominant cost; cache `.msh` files by SHA-256 of geometry parameters per ADR-0007.
+- Caching is mandatory for heavy computation. Mesh generation is the dominant cost; cache `.msh` files by SHA-256 of geometry parameters (see `architecture.md` § Key decisions).
 
 ### Section separators
 
@@ -81,7 +81,7 @@ Use only the sections that apply. Small files with one or two sections don't nee
 ## Environment
 
 - Python via `uv`, project-local virtual environment at `./.venv/`.
-- All dependencies pinned in `pyproject.toml` (ADR-0001).
+- All dependencies pinned in `pyproject.toml`.
 - Do not add runtime dependencies without an ADR.
 
 ---
@@ -111,8 +111,7 @@ A test that passes on first run is suspicious — either it was already passing 
 Stop. Surface the decision. Do not silently choose.
 
 - If the decision is small and reversible, propose two options in the submission's response and let the human pick.
-- If the decision is significant, draft an ADR in `docs/decisions/` (proposed status) and surface it.
-- Never amend `architecture.md` to record a decision without a corresponding ADR.
+- If the decision is significant, propose the addition to `architecture.md` § Key decisions and surface it for human approval.
 
 ### When scope creep tempts
 
@@ -136,8 +135,9 @@ Never create bloat files. Every markdown file is a maintenance burden.
 - `README.md` at root — overview + quick start only.
 - `CLAUDE.md` at root — this file.
 - `docs/physics.md`, `docs/verification.md`, `docs/architecture.md`, `docs/open-questions.md` — the four core docs. Fixed set.
-- `docs/decisions/NNNN-slug.md` — ADRs, one per decision.
 - `docs/submissions/NNNN-slug.md` — submission briefs.
+- `docs/derivations/<topic>.md` — durable algebraic derivations (e.g. `algebraic-verification.md`). Pointed to by the submission that produced them.
+- `docs/inspector.md` — guidance for tasks touching `scripts/inspect.py` / `scripts/diagnose.py`. **Not auto-loaded**; only pull when working on the inspector or diagnose CLIs.
 
 **Do not create:**
 
@@ -150,8 +150,8 @@ Never create bloat files. Every markdown file is a maintenance burden.
 
 ### Doc-editing rules
 
-- **Agent may edit:** `docs/open-questions.md` (append questions, mark resolved), `docs/decisions/` (propose new ADRs as `proposed` status), `docs/submissions/` (create new briefs, update status of in-flight ones).
-- **Agent must propose, human approves:** `docs/architecture.md` (any structural change), ADR transitions from `proposed` to `accepted`.
+- **Agent may edit:** `docs/open-questions.md` (append questions, mark resolved), `docs/submissions/` (create new briefs, update status of in-flight ones), `docs/derivations/` (append derivations referenced by a submission).
+- **Agent must propose, human approves:** `docs/architecture.md` (any structural change, including additions to § Key decisions), `docs/inspector.md` (any rule change — these are rules-from-incident).
 - **Human-owned, agent must not silently edit:** `docs/physics.md`, `docs/verification.md`. If the agent believes either is wrong or incomplete, raise it in `docs/open-questions.md` and stop.
 
 ---

@@ -27,7 +27,7 @@ The planner sets the physics and the verification contract; the worker decides h
 - Planner: physics correctness, acceptance thresholds, structural assertions, cross-doc references, decisions with project-wide consequences (anything the doc-set encodes).
 - Worker: file and module layout, API shapes, parameter names, dataclass design, local implementation patterns inside one submission's surface.
 
-If a worker style choice starts looking like a physics or contract decision (e.g. a "convenience" coordinate-based subdomain assignment that ADR-0003 forbids), the worker stops and surfaces.
+If a worker style choice starts looking like a physics or contract decision (e.g. a "convenience" coordinate-based subdomain assignment that `architecture.md` § Key decisions — material interfaces forbids), the worker stops and surfaces.
 
 ## Don't restate the docs
 
@@ -56,3 +56,21 @@ Two patterns recur in Part 1 verification briefs. Use these by name rather than 
 ## Naming
 
 `NNNN-slug.md`, four-digit append-only numbering, hyphenated slug describing the unit of work (not the date). This file is `_conventions.md` — the underscore prefix marks it as meta, not a numbered submission.
+
+## Post-accept compaction
+
+Briefs accumulate detail while in flight: "Decisions resolved", "Decisions deferred", "Implementation notes (worker)", forced-failure logs, convergence tables. That detail is load-bearing only until status flips to `accepted`. After that it becomes archival noise for every agent that reads the directory.
+
+On status flip to `accepted` (or `done`), compact the brief to roughly:
+
+- Head matter (Status / Predecessors / Successors).
+- Goal (one paragraph).
+- Acceptance — the criteria as they were, with each line marked ✓ or noted as superseded.
+- A short "What shipped" pointer: file paths, key commit hash if non-obvious, the one or two facts a future reader actually needs (e.g. "final L² rate 1.97 on transfinite mesh; convergence table in commit `<sha>`").
+- Out of scope (kept; it's a permanent boundary).
+
+Move forced-failure logs and convergence tables into the commit message that flipped the status. Briefs are not changelogs.
+
+Worker decisions that surface a lesson worth keeping (e.g. 0003's "transfinite mesh was needed because L² error sat at the noise floor on the unstructured mesh") go into `docs/open-questions.md` if still open, or into `docs/inspector.md` / `architecture.md` § Key decisions if they generalize. They do not live in an accepted brief.
+
+Compaction is the author's job, applied as part of the same commit that flips status. The brief that compacts itself is doing its job; the brief that grows after acceptance is not.

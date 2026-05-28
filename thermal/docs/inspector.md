@@ -120,7 +120,7 @@ Tests in `tests/` enforce correctness assertions; they fail loudly when somethin
 Do not:
 - Add asserts to the inspector (move them to a test).
 - Add visualization to the test harness on a passing run (the
-  `tests/_artifacts/` bundle is failure-only per ADR-0008).
+  `tests/_artifacts/` bundle is failure-only per `architecture.md` § Key decisions).
 - Conflate the `artifacts/inspect/` tree (this tool) with the
   `tests/_artifacts/` tree (failure diagnostics).
 

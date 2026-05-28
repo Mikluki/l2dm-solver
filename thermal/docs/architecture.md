@@ -6,27 +6,25 @@ The physics lives in `physics.md`. The test problems live in `verification.md`. 
 
 ## Stack
 
-- **scikit-fem** — finite element assembly, basis functions, DOF management. Pure Python on NumPy/SciPy, no compiled dependencies, no install friction. See ADR-0001.
+- **scikit-fem** — finite element assembly, basis functions, DOF management. Pure Python on NumPy/SciPy, no compiled dependencies, no install friction. See § Key decisions.
 - **gmsh** — mesh generation via the Python API. Subdomains and boundaries as physical groups, propagated through to scikit-fem.
 - **meshio** — `.msh` ↔ scikit-fem mesh bridge.
 - **pytest** — verification harness runner.
 - **numpy, scipy** — pulled in by the above; direct use only for sparse linear algebra and array operations.
 - **matplotlib** — diagnostic artifact plotting.
 
-Versions are pinned in `pyproject.toml`. No additional runtime dependencies without an ADR.
-
 ## Pipeline
 
 The data flow for any verification problem run:
 
-1. **Geometry build** — `geometry/` builders construct a gmsh model with physical groups for subdomains and boundaries. Cached on disk by content hash; see ADR-0007.
+1. **Geometry build** — `geometry/` builders construct a gmsh model with physical groups for subdomains and boundaries. Cached on disk by content hash; see § Key decisions.
 2. **Mesh** — gmsh generates the `.msh` file at the requested characteristic size.
 3. **Load** — `meshio.read` → `skfem.MeshTri.load`, with subdomain and boundary tags preserved as `mesh.subdomains` and `mesh.boundaries`.
 4. **Basis** — `Basis(mesh, ElementTriP1())` for the trial/test space; a derived P0 basis via `basis.with_element(ElementTriP0())` for piecewise-constant fields ($\kappa$, source).
 5. **Coefficients** — $\kappa$ built as a P0 array indexed by subdomain tag; source $Q$ either as a P0 array (piecewise-constant case) or evaluated at quadrature points inside the form (smooth case).
 6. **Assemble** — bilinear form for the stiffness, linear form for the load. Coefficients passed via the `w` dictionary; the form uses `w.kappa` and `w.source` indirection.
-7. **BCs and nullspace** — Dirichlet DOFs identified from boundary tags. For pure-Neumann problems, one node is pinned (ADR-0005).
-8. **Solve** — `solve(*condense(A, b, D=dirichlet_dofs))`. Direct sparse solver via SciPy (ADR-0006).
+7. **BCs and nullspace** — Dirichlet DOFs identified from boundary tags. For pure-Neumann problems, one node is pinned (see § Nullspace handling).
+8. **Solve** — `solve(*condense(A, b, D=dirichlet_dofs))`. Direct sparse solver via SciPy.
 9. **Post-process** — error norms against the exact solution, diagnostic artifacts to `tests/_artifacts/{test_id}/`.
 
 The pipeline is the same for every problem. New problems add a Problem definition (see below); they do not modify the pipeline.
@@ -87,7 +85,7 @@ Helper functions in `geometry/` for the common shapes used across verification p
 - `two_disks_in_disk(...)` — Problem 4.
 - `l_shape(mesh_size)` — Problem 5.
 
-Each returns a gmsh model with documented physical group tags. Builders are cached on disk; see ADR-0007.
+Each returns a gmsh model with documented physical group tags. Builders are cached on disk; see § Key decisions.
 
 ## Module structure
 
@@ -118,20 +116,20 @@ pyproject.toml
 
 Five source modules. If any grows past one file's worth of code, that's its own decision recorded as an ADR.
 
-**Proposed:** `scripts/` and `artifacts/` are deliberately outside the harness contract. `scripts/inspect.py` is a look-at-your-work CLI that produces visual artifacts (mesh + BC + κ + source + exact T + computed T_h + error + convergence plot) on demand — distinct from the failure-only `tests/_artifacts/` bundle (ADR-0008). Keeping it outside `src/` makes its non-test role explicit. Pending human acceptance of this layout change.
+**Proposed:** `scripts/` and `artifacts/` are deliberately outside the harness contract. `scripts/inspect.py` is a look-at-your-work CLI that produces visual artifacts (mesh + BC + κ + source + exact T + computed T_h + error + convergence plot) on demand — distinct from the failure-only `tests/_artifacts/` bundle. Keeping it outside `src/` makes its non-test role explicit. Pending human acceptance of this layout change.
 
-## Decisions
+## Key decisions
 
-Each is summarized here in one line; ADR files in `docs/decisions/` carry the longer rationale.
+One line each. These are authoritative; the bullet *is* the decision, not a summary of one elsewhere. Adding or changing an entry needs human approval.
 
-- **ADR-0001:** Stack is scikit-fem + gmsh + meshio + pytest. Pure-Python, no compiled deps, suits agentic dev introspection.
-- **ADR-0002:** P1 Lagrange elements throughout Part 1. P2 deferred to Part 2 if singular-quadrature accuracy demands it.
-- **ADR-0003:** All material interfaces are mesh-aligned (gmsh feature edges enforce alignment).
-- **ADR-0004:** $\kappa$ represented as a P0 field, indexed per element from the subdomain tag.
-- **ADR-0005:** Neumann nullspace handled by **node-pinning** — one DOF clamped to the exact value (or zero) before solve. Loud failure mode (singular matrix if forgotten) preferred over silent mean-offset.
-- **ADR-0006:** Direct sparse solver (`scipy.sparse.linalg.spsolve`) for Part 1. Iterative solvers deferred to Part 2 where dense kernel matrices may require them.
-- **ADR-0007:** Mesh artifacts cached on disk in `tests/_mesh_cache/` keyed by SHA-256 of geometry parameters. Re-meshing on refinement studies is the dominant cost otherwise.
-- **ADR-0008:** Diagnostic artifacts emitted to `tests/_artifacts/{test_id}/` on test failure. Gitignored.
+- **Stack.** scikit-fem + gmsh + meshio + pytest. Pure-Python, no compiled deps, suits agentic dev introspection.
+- **Element order.** P1 Lagrange throughout Part 1. P2 deferred to Part 2 if singular-quadrature accuracy demands it.
+- **Material interfaces.** All mesh-aligned (gmsh feature edges enforce alignment).
+- **Coefficient representation.** $\kappa$ as a P0 field, indexed per element from the subdomain tag.
+- **Nullspace handling.** Neumann nullspace handled by **node-pinning** — one DOF clamped to the exact value (or zero) before solve. Loud failure mode (singular matrix if forgotten) preferred over silent mean-offset. See § Nullspace handling for the full convention.
+- **Linear solver.** Direct sparse via `scipy.sparse.linalg.spsolve` for Part 1. Iterative deferred to Part 2 where dense kernel matrices may require them.
+- **Mesh cache.** `.msh` artifacts cached in `tests/_mesh_cache/` keyed by SHA-256 of geometry parameters. Re-meshing on refinement studies is the dominant cost otherwise.
+- **Failure-only diagnostics.** Test diagnostic artifacts emitted to `tests/_artifacts/{test_id}/` on test failure only. Gitignored.
 
 ## Coefficient handling: the one example worth inlining
 
@@ -146,7 +144,7 @@ basis_p0 = basis.with_element(ElementTriP0())
 
 # kappa as a P0 field, one value per element. Subdomain assignment uses
 # the gmsh physical-group *name* (the key in mesh.subdomains), never the
-# element-centroid coordinate (ADR-0003).
+# element-centroid coordinate (see § Key decisions — material interfaces).
 kappa_values = np.full(mesh.t.shape[1], np.nan)
 for name, element_ids in mesh.subdomains.items():
     kappa_values[element_ids] = problem.kappa(name)
@@ -166,7 +164,7 @@ This is the only inlined example in this doc. All other API specifics live in co
 
 When a problem's boundary conditions are pure-Neumann (e.g., zero-flux on every edge), the stiffness matrix is singular: the discrete operator has a one-dimensional kernel — the constant function — exactly as the continuous operator does. The solution is determined only up to an additive constant, and the linear solve will either fail (singular matrix) or return garbage. Some fix is mandatory.
 
-We use **node-pinning uniformly** (ADR-0005). The convention:
+We use **node-pinning uniformly** (see § Key decisions). The convention:
 
 1. **When to pin.** Pin exactly one DOF iff the problem has no Dirichlet boundary. Do not pin when at least one Dirichlet DOF already exists — the Dirichlet condition removes the nullspace cleanly on its own.
 2. **Which DOF — caller chooses.** The `Problem` declares its own pin location via `pin_point() -> (x, y) | None`. Returning `None` means "no pin needed" (Dirichlet present). Returning `(x, y)` means "pin the mesh DOF nearest this point". The solver does **not** invent a default: there is no centroid-or-corner heuristic, no `dofs[0]` fallback. The choice is the problem author's, recorded next to the exact solution it must be consistent with.
@@ -176,7 +174,7 @@ We use **node-pinning uniformly** (ADR-0005). The convention:
 4. **What value.** Pin to the exact solution evaluated at the pin point. Discrete and reference solutions then share the same gauge, and the $L^2$ error reflects only discretization error, not the constant ambiguity. (Problems without an exact solution — none in Part 1 — must define a pin value separately; cross that bridge when it appears.)
 5. **How, in scikit-fem.** Add the pinned DOF to the Dirichlet DOF set passed to `condense(A, b, D=dirichlet_dofs)` and place the pin value in `x` at that index before condensing. No special code path — the pin is a Dirichlet DOF as far as the solver is concerned.
 
-**Why not subtract the mean.** Subtract-the-mean is silent: a forgotten nullspace fix produces a finite-looking answer with an arbitrary constant offset, and the convergence rate measurement can still look right because rates are scale-invariant in the perturbation. Node-pinning fails loudly — `spsolve` raises on a singular matrix the first time the fix is forgotten. ADR-0005 chose the loud failure mode.
+**Why not subtract the mean.** Subtract-the-mean is silent: a forgotten nullspace fix produces a finite-looking answer with an arbitrary constant offset, and the convergence rate measurement can still look right because rates are scale-invariant in the perturbation. Node-pinning fails loudly — `spsolve` raises on a singular matrix the first time the fix is forgotten. The loud failure mode was the deliberate choice.
 
 **Why no solver-side default for the pin point.** A default would let a problem author forget to think about pin placement and still get a working test, masking either a poor pin choice (drift across refinements, ill-conditioned spot) or a bug where the pin landed somewhere unintended. Requiring `pin_point()` to be explicit forces the author to look at the exact solution and pick a point on purpose.
 

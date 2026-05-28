@@ -57,4 +57,4 @@ uv run python -m scripts.diagnose problem_01
 uv run python -m scripts.diagnose problem_01 --mesh-size 0.1
 ```
 
-Writes `artifacts/inspect/<problem_name>/internals.md`. Healthy = all three sections ✓. Any ✗ is a halt-and-investigate signal. Read `artifacts/inspect/_conventions.md` § Layer 2 before extending.
+Writes `artifacts/inspect/<problem_name>/internals.md`. Healthy = all three sections ✓. Any ✗ is a halt-and-investigate signal. Read `docs/inspector.md` § Layer 2 before extending.
