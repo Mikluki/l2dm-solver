@@ -1,8 +1,9 @@
-# ABOUTME: gmsh builder for the Problem-2 rectangle split at x=1/2. The
-# interface line is a feature edge (ADR-0003) so every triangle lies wholly
-# inside one subdomain; subdomains and boundaries are tagged as named gmsh
-# physical groups so meshio propagates them to scikit-fem as keys in
-# mesh.subdomains and mesh.boundaries. Builder is cache-backed (ADR-0007).
+# ABOUTME: gmsh OCC-kernel builder for the Problem-2 rectangle split at x=1/2.
+# Two addRectangle calls are joined by occ.fragment so the interface at x=1/2
+# is a conforming shared edge (ADR-0003); post-fragment surface and curve tags
+# are recovered via bounding-box queries — never hard-coded through the boolean.
+# Transfinite (structured) meshing is applied after occ.synchronize() to keep
+# convergence rate inside the acceptance window. Builder is cache-backed (ADR-0007).
 
 from __future__ import annotations
 
@@ -73,26 +74,24 @@ class RectangleSplitSpec:
 # ============================================================================
 
 
+def _curve_bbox(curve_tag: int) -> tuple[float, float, float, float]:
+    """Return (xmin, ymin, xmax, ymax) for a 1-D entity."""
+    xmin, ymin, _zmin, xmax, ymax, _zmax = gmsh.model.getBoundingBox(1, curve_tag)
+    return xmin, ymin, xmax, ymax
+
+
 def _build_msh(mesh_size: float, height: float, out_path: Path) -> None:
-    """Run gmsh to produce a `.msh` with the x=1/2 interface as a feature edge.
+    """Run gmsh (OCC kernel) to produce a `.msh` with the x=1/2 interface as a
+    conforming shared edge (ADR-0003).
 
-    Six corner points (two domain bottoms, two interface, two domain tops);
-    the interface edge p_b_mid -> p_t_mid bounds *both* surfaces, which is
-    what forces every element to respect the discontinuity (ADR-0003).
-
-    The two surfaces are meshed *transfinitely* (structured triangulation):
-    each side of the slab is a uniform grid of right triangles. This costs
-    nothing on a rectangle and removes the unstructured-mesh-quality noise
-    that otherwise makes the asymptotic L^2 convergence rate fluctuate
-    outside the planner's "within 0.2 of 2.0" acceptance window for an
-    exact solution that is piecewise polynomial of degree <= 2. Structured
-    meshing on a rectangular domain is not a physics choice and does not
-    deviate from any ADR; the alignment requirement (ADR-0003) is the only
-    binding mesh constraint and it is satisfied trivially.
+    Two addRectangle halves are joined by occ.fragment; post-boolean surface
+    and curve tags are recovered via bounding-box queries so they remain correct
+    even if fragment renumbers them. Transfinite (structured) meshing is then
+    applied to both surfaces to keep the L^2 convergence rate inside the
+    acceptance window (same rationale as the original geo-kernel version).
     """
-    # Number of node points along each transfinite curve. gmsh wants the
-    # *node* count (segments + 1); round up so the effective edge length
-    # stays at or below ``mesh_size``.
+    # Node count along each transfinite curve: segments + 1, rounded up so the
+    # effective edge length stays at or below mesh_size.
     half_width = _X_INTERFACE
     n_along_x_half = max(2, int(np.ceil(half_width / mesh_size)) + 1)
     n_along_y = max(2, int(np.ceil(height / mesh_size)) + 1)
@@ -102,54 +101,63 @@ def _build_msh(mesh_size: float, height: float, out_path: Path) -> None:
         gmsh.option.setNumber("General.Terminal", 0)
         gmsh.model.add(GEOMETRY_NAME)
 
-        # Corners. _b = bottom row (y=0), _t = top row (y=height);
-        # _l = x=0, _mid = x=0.5, _r = x=1. mesh_size is supplied as a
-        # default characteristic length, but transfinite overrides it.
-        p_b_l = gmsh.model.geo.addPoint(0.0, 0.0, 0.0, mesh_size)
-        p_b_mid = gmsh.model.geo.addPoint(_X_INTERFACE, 0.0, 0.0, mesh_size)
-        p_b_r = gmsh.model.geo.addPoint(1.0, 0.0, 0.0, mesh_size)
-        p_t_r = gmsh.model.geo.addPoint(1.0, height, 0.0, mesh_size)
-        p_t_mid = gmsh.model.geo.addPoint(_X_INTERFACE, height, 0.0, mesh_size)
-        p_t_l = gmsh.model.geo.addPoint(0.0, height, 0.0, mesh_size)
-
-        # Edges. The interface edge is shared between the two surfaces and is
-        # the ADR-0003 feature edge that pins triangles to one side or the
-        # other.
-        e_b_left = gmsh.model.geo.addLine(p_b_l, p_b_mid)
-        e_b_right = gmsh.model.geo.addLine(p_b_mid, p_b_r)
-        e_right = gmsh.model.geo.addLine(p_b_r, p_t_r)
-        e_t_right = gmsh.model.geo.addLine(p_t_r, p_t_mid)
-        e_t_left = gmsh.model.geo.addLine(p_t_mid, p_t_l)
-        e_left = gmsh.model.geo.addLine(p_t_l, p_b_l)
-        e_interface = gmsh.model.geo.addLine(p_b_mid, p_t_mid)
-
-        # Left surface: counterclockwise around the left subdomain.
-        loop_left = gmsh.model.geo.addCurveLoop(
-            [e_b_left, e_interface, e_t_left, e_left]
+        # Two axis-aligned rectangles sharing the edge at x = _X_INTERFACE.
+        surf_left_init = gmsh.model.occ.addRectangle(
+            0.0, 0.0, 0.0, _X_INTERFACE, height
         )
-        # Right surface: the interface edge is traversed in the *opposite*
-        # direction (signed -e_interface) to keep the right loop CCW.
-        loop_right = gmsh.model.geo.addCurveLoop(
-            [e_b_right, e_right, e_t_right, -e_interface]
+        surf_right_init = gmsh.model.occ.addRectangle(
+            _X_INTERFACE, 0.0, 0.0, 1.0 - _X_INTERFACE, height
         )
-        surf_left = gmsh.model.geo.addPlaneSurface([loop_left])
-        surf_right = gmsh.model.geo.addPlaneSurface([loop_right])
 
-        # Transfinite (structured) meshing. The two horizontal segments of
-        # each subdomain get matching node counts so the interface gets
-        # conforming triangles on both sides.
-        for line_id in (e_b_left, e_t_left):
-            gmsh.model.geo.mesh.setTransfiniteCurve(line_id, n_along_x_half)
-        for line_id in (e_b_right, e_t_right):
-            gmsh.model.geo.mesh.setTransfiniteCurve(line_id, n_along_x_half)
+        # fragment merges the shared edge so it belongs to both surfaces
+        # (ADR-0003). outDimTagsMap[0] = surfaces from surf_left_init;
+        # outDimTagsMap[1] = surfaces from surf_right_init.
+        _out, out_map = gmsh.model.occ.fragment(
+            [(2, surf_left_init)], [(2, surf_right_init)]
+        )
+        surf_left = out_map[0][0][1]
+        surf_right = out_map[1][0][1]
+
+        # synchronize before any mesh or physical-group call (OCC requirement).
+        gmsh.model.occ.synchronize()
+
+        # Identify boundary curves by bounding box. The two rectangles have
+        # axis-aligned edges, so xmin==xmax identifies a vertical line and
+        # ymin==ymax a horizontal one.
+        EPS = 1e-9
+        left_curves = [
+            t for _, t in gmsh.model.getBoundary([(2, surf_left)], oriented=False)
+        ]
+        right_curves = [
+            t for _, t in gmsh.model.getBoundary([(2, surf_right)], oriented=False)
+        ]
+
+        def _vert_at(tag: int, x: float) -> bool:
+            xmin, _ym, xmax, _yM = _curve_bbox(tag)
+            return abs(xmin - x) < EPS and abs(xmax - x) < EPS
+
+        def _horiz_at(tag: int, y: float) -> bool:
+            _xm, ymin, _xM, ymax = _curve_bbox(tag)
+            return abs(ymin - y) < EPS and abs(ymax - y) < EPS
+
+        e_left = next(t for t in left_curves if _vert_at(t, 0.0))
+        e_interface = next(t for t in left_curves if _vert_at(t, _X_INTERFACE))
+        e_b_left = next(t for t in left_curves if _horiz_at(t, 0.0))
+        e_t_left = next(t for t in left_curves if _horiz_at(t, height))
+
+        e_right = next(t for t in right_curves if _vert_at(t, 1.0))
+        e_b_right = next(t for t in right_curves if _horiz_at(t, 0.0))
+        e_t_right = next(t for t in right_curves if _horiz_at(t, height))
+
+        # Transfinite (structured) meshing — kernel-agnostic API after synchronize.
+        for line_id in (e_b_left, e_t_left, e_b_right, e_t_right):
+            gmsh.model.mesh.setTransfiniteCurve(line_id, n_along_x_half)
         for line_id in (e_left, e_interface, e_right):
-            gmsh.model.geo.mesh.setTransfiniteCurve(line_id, n_along_y)
-        gmsh.model.geo.mesh.setTransfiniteSurface(surf_left)
-        gmsh.model.geo.mesh.setTransfiniteSurface(surf_right)
+            gmsh.model.mesh.setTransfiniteCurve(line_id, n_along_y)
+        gmsh.model.mesh.setTransfiniteSurface(surf_left)
+        gmsh.model.mesh.setTransfiniteSurface(surf_right)
 
-        gmsh.model.geo.synchronize()
-
-        # Physical groups - names are the keys scikit-fem will see in
+        # Physical groups — string names are the keys scikit-fem sees in
         # mesh.subdomains / mesh.boundaries.
         gmsh.model.addPhysicalGroup(
             2, [surf_left], tag=_LEFT_SUBDOMAIN_TAG, name=LEFT_SUBDOMAIN_NAME
