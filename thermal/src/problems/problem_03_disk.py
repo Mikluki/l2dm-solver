@@ -56,18 +56,23 @@ OUTER_PROBE_EXACT_T: float = (
 class Problem03Disk:
     """Radially symmetric disk-in-disk; kappa_1 is varied in the sweep test.
 
-    kappa_2 and geometry are fixed per verification.md. The dataclass holds
-    kappa_1 explicitly so sweep instantiation never touches geometry; cache
-    hits are the consequence (kappa is not a geometry parameter).
+    kappa_2 and the outer radius are fixed per verification.md. R_inner is
+    constructor-parameterised so Problem 4's per-config FE-error proxy
+    (submission 0008 § Decisions 2) can evaluate the same closed form at
+    smaller inner radii without re-tagging or duplicating the problem class.
+    The dataclass holds kappa_1 explicitly so sweep instantiation never
+    touches geometry; cache hits are the consequence (kappa is not a geometry
+    parameter).
     """
 
     kappa_1: float = _KAPPA_1_DEFAULT
+    R_inner: float = _R_INNER
     name: str = field(default="problem_03_disk")
 
     # --- Protocol surface ---------------------------------------------------
 
     def geometry(self) -> Callable[[float], object]:
-        return build_disk_in_disk(_R_INNER, _R_OUTER)
+        return build_disk_in_disk(self.R_inner, _R_OUTER)
 
     def kappa(self, subdomain_name: str) -> float:
         # Subdomain assignment is by gmsh physical-surface name (brief § Decisions 6).
@@ -86,7 +91,7 @@ class Problem03Disk:
         # with r=R_inner (via OCC fragment) ensures each element's quadrature
         # points are wholly on one side, so the discontinuity is never straddled.
         r = np.sqrt(x**2 + y**2)
-        return np.where(r < _R_INNER, _Q_0, 0.0)
+        return np.where(r < self.R_inner, _Q_0, 0.0)
 
     def boundary_conditions(self) -> dict[str, DirichletBC]:
         # Dirichlet T=0 on the outer circle; outer circle kills the nullspace.
@@ -103,16 +108,16 @@ class Problem03Disk:
         x = np.asarray(x, dtype=float)
         y = np.asarray(y, dtype=float)
         r = np.sqrt(x**2 + y**2)
-        inside = r < _R_INNER
+        inside = r < self.R_inner
 
         t_in = (
-            _Q_0 * (_R_INNER**2 - r**2) / (4.0 * self.kappa_1)
-            + _Q_0 * _R_INNER**2 / (2.0 * _KAPPA_2) * np.log(_R_OUTER / _R_INNER)
+            _Q_0 * (self.R_inner**2 - r**2) / (4.0 * self.kappa_1)
+            + _Q_0 * self.R_inner**2 / (2.0 * _KAPPA_2) * np.log(_R_OUTER / self.R_inner)
         )
         # Guard r=0 (in inside region) from log(R_out / 0). np.where evaluates
         # both branches; substitute r=1 for inside points so log stays finite.
         r_safe = np.where(inside, 1.0, r)
-        t_out = _Q_0 * _R_INNER**2 / (2.0 * _KAPPA_2) * np.log(_R_OUTER / r_safe)
+        t_out = _Q_0 * self.R_inner**2 / (2.0 * _KAPPA_2) * np.log(_R_OUTER / r_safe)
 
         return np.where(inside, t_in, t_out)
 
@@ -129,7 +134,7 @@ class Problem03Disk:
         x = np.asarray(x, dtype=float)
         y = np.asarray(y, dtype=float)
         r_sq = x**2 + y**2
-        inside = r_sq < _R_INNER**2
+        inside = r_sq < self.R_inner**2
 
         # Inside gradient: well-defined everywhere (= 0 at origin by symmetry)
         gx_in = -_Q_0 * x / (2.0 * self.kappa_1)
@@ -137,7 +142,7 @@ class Problem03Disk:
 
         # Outside gradient: guard r^2=0 for inside points where r<R_inner
         r_sq_safe = np.where(inside, 1.0, r_sq)
-        factor = -_Q_0 * _R_INNER**2 / (2.0 * _KAPPA_2 * r_sq_safe)
+        factor = -_Q_0 * self.R_inner**2 / (2.0 * _KAPPA_2 * r_sq_safe)
         gx_out = factor * x
         gy_out = factor * y
 

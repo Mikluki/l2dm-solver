@@ -15,6 +15,7 @@ import argparse
 import logging
 import sys
 from pathlib import Path
+from typing import Callable
 
 import matplotlib
 
@@ -28,8 +29,10 @@ if str(_PROJECT_ROOT) not in sys.path:
 
 from src.harness.study import run_refinement_study  # noqa: E402
 from src.problems.problem_01_manufactured import Problem01Manufactured  # noqa: E402
+from src.problems.protocol import Problem  # noqa: E402
 from src.problems.problem_02_slab import Problem02Slab  # noqa: E402
 from src.problems.problem_03_disk import Problem03Disk  # noqa: E402
+from src.problems.problem_04_two_disks import Problem04TwoDisks  # noqa: E402
 from src.problems.problem_05_lshape import Problem05LShape  # noqa: E402
 from src.solver.solve_scalar import solve_scalar  # noqa: E402
 
@@ -42,11 +45,19 @@ logger = logging.getLogger("inspect")
 
 ARTIFACT_ROOT = _PROJECT_ROOT / "artifacts" / "inspect"
 
-# Registry. New problems land here when their submission accepts.
-PROBLEMS: dict[str, type] = {
+# Registry. New problems land here when their submission accepts. Values are
+# zero-arg callables that return a configured Problem instance; classes whose
+# default constructor works directly (Problem 1, 2, 3, 5) drop in by name,
+# while Problem 4 — which has no default config — uses a lambda pinned to
+# submission 0008 § Decisions 4 Config B (the "verification.md representative"
+# row of the geometric sweep).
+PROBLEMS: dict[str, Callable[[], Problem]] = {
     "problem_01": Problem01Manufactured,
     "problem_02": Problem02Slab,
     "problem_03": Problem03Disk,
+    "problem_04": lambda: Problem04TwoDisks(
+        R_inner=0.2, d_sep=2.0, R_outer=8.0, mesh_size=0.05,
+    ),
     "problem_05": Problem05LShape,
 }
 
@@ -264,6 +275,19 @@ def _annotate_interface(err_panel, problem, mesh) -> None:
             color="black", linestyle="--", linewidth=1.0,
             label=rf"interface $r={r_iface:g}$ ($\kappa$ jump)",
         )
+    elif isinstance(problem, Problem04TwoDisks):
+        theta = np.linspace(0.0, 2.0 * np.pi, 256)
+        for i, (cx, cy) in enumerate((problem.center_a, problem.center_b)):
+            err_panel.plot(
+                cx + problem.R_inner * np.cos(theta),
+                cy + problem.R_inner * np.sin(theta),
+                color="black", linestyle="--", linewidth=1.0,
+                # Single legend entry; both circles share the same physical meaning.
+                label=(
+                    rf"inner-disk interface ($\kappa$ jump, $r={problem.R_inner:g}$)"
+                    if i == 0 else None
+                ),
+            )
     elif isinstance(problem, Problem05LShape):
         from src.problems.problem_05_lshape import (  # local import
             _CORNER_X,
@@ -436,7 +460,18 @@ def main() -> int:
 
     _emit_dashboard(out_dir, problem, mesh_size)
     if not args.no_convergence:
-        _emit_convergence(out_dir, problem)
+        # Problem 4's convergence variable is geometric (R_inner/d_sep), not h
+        # — `expected_rate()` returns NaN and `mesh_sizes()` is a single-element
+        # list (submission 0008 § Decisions 2). Skip the h-refinement panel
+        # rather than feed run_refinement_study a degenerate input.
+        if np.isnan(float(problem.expected_rate())):
+            logger.info(
+                "skipping convergence panel: %s has no h-refinement rate "
+                "(expected_rate is NaN; convergence variable is geometric)",
+                args.problem,
+            )
+        else:
+            _emit_convergence(out_dir, problem)
     return 0
 
 

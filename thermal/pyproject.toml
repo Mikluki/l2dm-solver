@@ -26,3 +26,11 @@ dev = [
 log_cli = true
 log_cli_level = "INFO"
 log_cli_format = "%(levelname)-7s %(name)s :: %(message)s"
+# Parallelise by default via pytest-xdist. The dominant cost in the suite is
+# the Problem-4 sweep — 7+ direct sparse solves on a 260k-dof mesh — and its
+# tests are independent, so wall-clock drops roughly to the slowest test.
+# The mesh cache is on-disk and content-addressed; concurrent workers writing
+# the same .msh is at worst a one-time duplicated build, never corruption,
+# because cached_mesh checks file existence before building. Override with
+# `-n0` for serial runs when debugging (live INFO logs interleave under -n auto).
+addopts = "-n auto"

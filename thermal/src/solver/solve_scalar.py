@@ -40,6 +40,10 @@ from src.geometry.rectangle_split import (
     RectangleSplitSpec,
     materialise as materialise_rectangle_split,
 )
+from src.geometry.two_disks_in_disk import (
+    TwoDisksInDiskSpec,
+    materialise as materialise_two_disks_in_disk,
+)
 from src.geometry.unit_square import (
     UnitSquareSpec,
     materialise as materialise_unit_square,
@@ -115,6 +119,8 @@ def _materialise_geometry(spec: Any, cache_dir: Path) -> Path:
         return materialise_rectangle_split(spec, cache_dir)
     if isinstance(spec, DiskInDiskSpec):
         return materialise_disk_in_disk(spec, cache_dir)
+    if isinstance(spec, TwoDisksInDiskSpec):
+        return materialise_two_disks_in_disk(spec, cache_dir)
     if isinstance(spec, LShapeSpec):
         return materialise_l_shape(spec, cache_dir)
     raise TypeError(f"unsupported geometry spec: {type(spec).__name__}")
