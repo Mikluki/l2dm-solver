@@ -30,6 +30,7 @@ from src.harness.study import run_refinement_study  # noqa: E402
 from src.problems.problem_01_manufactured import Problem01Manufactured  # noqa: E402
 from src.problems.problem_02_slab import Problem02Slab  # noqa: E402
 from src.problems.problem_03_disk import Problem03Disk  # noqa: E402
+from src.problems.problem_05_lshape import Problem05LShape  # noqa: E402
 from src.solver.solve_scalar import solve_scalar  # noqa: E402
 
 logger = logging.getLogger("inspect")
@@ -46,6 +47,7 @@ PROBLEMS: dict[str, type] = {
     "problem_01": Problem01Manufactured,
     "problem_02": Problem02Slab,
     "problem_03": Problem03Disk,
+    "problem_05": Problem05LShape,
 }
 
 
@@ -106,16 +108,32 @@ def _panel_field(
     ax, mesh, values, *, title: str, cbar_label: str,
     cmap: str = "viridis", symmetric: bool = False,
 ) -> None:
-    """tricontourf of a nodal field with labeled axes and colorbar."""
+    """tricontourf of a nodal field with labeled axes and colorbar.
+
+    Rule-4-compliant: a uniform field (min == max, e.g. Problem 5's Q ≡ 0)
+    gets a single-tick colorbar instead of matplotlib's auto-expanded fake
+    range; without this the source panel for Problem 5 shows a ±1e-14
+    artifact that reads as variation.
+    """
+    vmin, vmax = float(np.min(values)), float(np.max(values))
+    is_uniform = np.isclose(vmin, vmax)
     if symmetric:
-        vmax = float(np.max(np.abs(values))) or 1.0
-        levels = np.linspace(-vmax, vmax, 21)
+        absmax = float(np.max(np.abs(values))) or 1.0
+        levels = np.linspace(-absmax, absmax, 21)
         kw = {"cmap": cmap, "levels": levels}
+    elif is_uniform:
+        # Pin a tight range around the constant value; matplotlib needs a
+        # nonzero span or tricontourf complains.
+        pad = max(abs(vmin) * 1e-3, 1e-12)
+        kw = {"cmap": cmap, "levels": np.linspace(vmin - pad, vmin + pad, 3)}
     else:
         kw = {"cmap": cmap, "levels": 21}
     tcf = ax.tricontourf(mesh.p[0], mesh.p[1], mesh.t.T, values, **kw)
     cbar = plt.colorbar(tcf, ax=ax, shrink=0.85)
     cbar.set_label(cbar_label)
+    if is_uniform and not symmetric:
+        cbar.set_ticks([vmin])
+        cbar.set_ticklabels([f"{vmin:.4g}"])
     ax.set_aspect("equal")
     ax.set_title(title)
     _label_axes(ax)
@@ -176,7 +194,7 @@ def _panel_kappa(ax, mesh, problem) -> None:
     _label_axes(ax)
 
 
-def _panel_convergence(ax, study, problem_name: str) -> None:
+def _panel_convergence(ax, study, problem) -> None:
     # Units: Part 1 verification problems are non-dimensional by stated
     # convention (physics.md § Symbol glossary, Q row: "in practice
     # dimensionless in the warm-up tests"). The unit square has no physical
@@ -188,12 +206,24 @@ def _panel_convergence(ax, study, problem_name: str) -> None:
     h1 = np.array([lvl.h1_error for lvl in study.levels])
     ax.loglog(h, l2, "o-", label=rf"$\|T_h - T\|_{{L^2}}$ (fit {study.l2_rate:.2f})")
     ax.loglog(h, h1, "s-", label=rf"$|T_h - T|_{{H^1}}$ (fit {study.h1_rate:.2f})")
-    # Reference slopes anchored at the coarsest point.
-    ax.loglog(h, l2[0] * (h / h[0]) ** 2, "--", color="0.5", label="slope 2")
-    ax.loglog(h, h1[0] * (h / h[0]) ** 1, ":", color="0.5", label="slope 1")
+    # Reference slopes anchored at the coarsest point. Slopes come from the
+    # Problem's expected_rate() (= L^2) so the Problem-5 rate-4/3 case doesn't
+    # get a misleading slope-2 reference. H^1 rate = L^2 rate - 1 by standard
+    # P1 theory for elliptic problems (and matches all four registered
+    # problems: 2/1 for P1/P2/P3, 4/3 and 1/3 for P5).
+    l2_expected = float(problem.expected_rate())
+    h1_expected = l2_expected - 1.0
+    ax.loglog(
+        h, l2[0] * (h / h[0]) ** l2_expected, "--", color="0.5",
+        label=f"slope {l2_expected:.3g} (expected $L^2$)",
+    )
+    ax.loglog(
+        h, h1[0] * (h / h[0]) ** h1_expected, ":", color="0.5",
+        label=f"slope {h1_expected:.3g} (expected $H^1$)",
+    )
     ax.set_xlabel(r"$h$  (characteristic mesh length, $[-]$)")
     ax.set_ylabel(r"error norm  $[-]$")
-    ax.set_title(f"convergence  |  {problem_name}  (non-dimensional verification)")
+    ax.set_title(f"convergence  |  {problem.name}  (non-dimensional verification)")
     ax.grid(True, which="both", alpha=0.3)
     ax.legend(loc="lower right", fontsize=8)
 
@@ -204,14 +234,15 @@ def _panel_convergence(ax, study, problem_name: str) -> None:
 
 
 def _annotate_interface(err_panel, problem, mesh) -> None:
-    """Mark the material interface on the error panel (inspector.md Rule 6).
+    """Mark the error panel's expected-feature locations (inspector.md Rule 6).
 
     Problem 2: vertical kink line at x=1/2 (axis-aligned subdomain split).
     Problem 3: circle at r=R_inner (curved subdomain split, where P1 error
     typically concentrates in an annular shell - verification.md § Problem 3).
-    No-op when the problem has no interface (Problem 1). Three branches is
-    still not worth a Protocol-level accessor; if a fourth problem grows an
-    interface of yet another shape, that's the time to refactor.
+    Problem 5: diamond at the reentrant corner (1/2, 1/2) where the exact
+    solution's gradient diverges like r^{-1/3} and the P1 error concentrates -
+    theory-confirming per verification.md § Problem 5, not a bug.
+    No-op when the problem has no such feature (Problem 1).
     """
     if isinstance(problem, Problem02Slab):
         from src.geometry.rectangle_split import _X_INTERFACE  # local import
@@ -232,6 +263,18 @@ def _annotate_interface(err_panel, problem, mesh) -> None:
             r_iface * np.cos(theta), r_iface * np.sin(theta),
             color="black", linestyle="--", linewidth=1.0,
             label=rf"interface $r={r_iface:g}$ ($\kappa$ jump)",
+        )
+    elif isinstance(problem, Problem05LShape):
+        from src.problems.problem_05_lshape import (  # local import
+            _CORNER_X,
+            _CORNER_Y,
+        )
+
+        err_panel.plot(
+            float(_CORNER_X), float(_CORNER_Y),
+            marker="D", markersize=11, color="yellow", markeredgecolor="black",
+            linestyle="none",
+            label=r"reentrant corner ($\nabla T \sim r^{-1/3}$)",
         )
 
 
@@ -355,7 +398,7 @@ def _emit_convergence(out_dir: Path, problem) -> None:
     """Run the full refinement study and render the convergence plot."""
     study = run_refinement_study(problem)
     fig, ax = plt.subplots(figsize=(7.5, 5))
-    _panel_convergence(ax, study, problem.name)
+    _panel_convergence(ax, study, problem)
     fig.tight_layout()
     out = out_dir / "convergence.png"
     fig.savefig(out, dpi=130, bbox_inches="tight")
