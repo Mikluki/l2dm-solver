@@ -44,3 +44,17 @@ uv run python -m scripts.inspect problem_01 --mesh-size 0.05 --no-convergence
 ```
 
 Outputs land in `artifacts/inspect/<problem_name>/dashboard.png` and `convergence.png` (gitignored, regeneratable).
+
+## Solver invariant checks — `diagnose`
+
+Layer 2: structural sanity on the *solver*, independent of the exact solution. Catches "right rate, wrong constant" bugs that pass the rate test (`verification.md` § Problem 2 failure diagnostic).
+
+```bash
+# Three checks: subdomain integrity, source verification, K symmetry + residual.
+uv run python -m scripts.diagnose problem_01
+
+# At a specific mesh size (default: finest from problem.mesh_sizes()).
+uv run python -m scripts.diagnose problem_01 --mesh-size 0.1
+```
+
+Writes `artifacts/inspect/<problem_name>/internals.md`. Healthy = all three sections ✓. Any ✗ is a halt-and-investigate signal. Read `artifacts/inspect/_conventions.md` § Layer 2 before extending.
